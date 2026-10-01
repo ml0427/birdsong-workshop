@@ -114,7 +114,7 @@ test('使用才耗耐久：出售當月、製作、關店、重載都不耗，�
 });
 test('信任足夠但未買裝備的小禾只有關係，不捏造使用故事', () => {
   const g = game(); intro(g); order(g, '銅'); next(g);
-  for (let n = 0; n < 5; n++) { at(g, 'he'); g.npc({ type: 'talk' }); depart(g); while (W.activeVisit(g.s)) depart(g); next(g); }
+  for (let n = 0; n < 8; n++) { while (W.activeVisit(g.s)) { const v = W.activeVisit(g.s); if (v.npc === 'he' && !v.asked) g.npc({ type: 'talk' }); depart(g); } next(g); }
   assert(g.s.npcs.he.trust >= 3); assert.equal(g.s.npcs.he.story, false); assert.equal(g.s.npcs.he.storyItem, null);
   assert.equal(g.s.news.some(n => n.id === 'story-v2-he'), false); assert.equal(W.owned(g.s, 'he').length, 0);
 });
@@ -132,7 +132,7 @@ test('退役依真實磨損而非固定售出三月；本人同意且到櫃臺�
 });
 test('磨損舊物不符合需求，修復才可跨人再售，原退役者不能買回同一件', () => {
   const { g, item } = returnedStaff(); const cen = { ...W.activeVisit(g.s), phase: 'request', needs: ['staff'] };
-  const other = { ...cen, npc: 'he' }; assert.equal(W.suitable(g.s, item, other), false);
+  const other = { ...cen, npc: 'he', minQuality: 0 }; assert.equal(W.suitable(g.s, item, other), false);
   g.do({ type: 'repair', itemId: item.id }); const repaired = g.s.items[item.id]; assert.equal(repaired.durability, 9);
   assert.equal(W.suitable(g.s, repaired, cen), false); assert.equal(W.suitable(g.s, repaired, other), true);
   rejection(g, { type: 'repair', itemId: item.id }, /尚未修復/);
@@ -140,7 +140,7 @@ test('磨損舊物不符合需求，修復才可跨人再售，原退役者不�
 test('新持有者獨立使用事件並磨耗，保留舊持有者歷史與贈還不重複', () => {
   const { g, item } = returnedStaff(); g.do({ type: 'repair', itemId: item.id });
   // Simulate an explicit compatible ordinary request after the current person departs.
-  depart(g); g.s.visits.push({ id: 'cross-owner', month: g.s.month, npc: 'he', needs: ['staff'], kind: 'normal', asked: true, status: 'waiting', phase: 'request', counterId: `cross-owner@${g.s.month}`, reason: '想用木杖照路。', minQuality: 0, traitRequired: null });
+  depart(g); g.s.visits.push({ id: 'cross-owner', month: g.s.month, npc: 'he', needs: ['staff'], kind: 'normal', asked: true, status: 'waiting', phase: 'request', counterId: `cross-owner@${g.s.month}`, reason: '想用木杖照路。', minQuality: 0, traitRequired: null, contentKey: null, contextText: '' });
   at(g, 'he'); g.npc({ type: 'sell', itemId: item.id }); next(g); const current = g.s.items[item.id];
   assert.equal(current.owner, 'he'); assert.equal(current.episodes.length, 2); assert.equal(current.episodes[1].uses, 1); assert.equal(current.durability, 6);
   assert(current.history.some(h => h.text.startsWith('阿岑使用'))); assert(current.history.some(h => h.text.startsWith('小禾使用')));
@@ -178,7 +178,7 @@ test('schema2 往返完整保留隊列、訂單、參數、持有期與故事證
   assert.throws(() => W.importSave('{broken')); g.s = W.importSave(text); next(g); assert.equal(g.s.materials.金, 12);
 });
 test('schema1 開場未採購存檔遷移恢復阿岑等待，資金與物品不重置', () => {
-  const old = oldGame(); const s = W.importSave(Old.exportSave(old.s)); assert.equal(s.schema, 2); assert.equal(s.coins, old.s.coins);
+  const old = oldGame(); const s = W.importSave(Old.exportSave(old.s)); assert.equal(s.schema, 3); assert.equal(s.coins, old.s.coins);
   assert.equal(W.activeVisit(s).npc, 'cen'); assert.equal(W.activeVisit(s).phase, 'service'); assert.equal(s.npcs.cen.story, false);
   assert.equal(s.items['item-1'].episodes[0].uses, 0); assert.equal(s.items['item-1'].owner, 'cen'); W.validate(s);
 });
@@ -226,7 +226,7 @@ test('可持續經營、同用途再購有理由、金鈴一次委託與日常�
   const returnedRing = W.inventory(g.s).find(i => i.recipe === 'bell' && i.returned); assert(returnedRing);
   g.do({ type: 'repair', itemId: returnedRing.id });
   const original = g.s.returns.find(o => o.itemId === returnedRing.id).npc, buyer = original === 'shu' ? 'he' : 'shu';
-  const v = { id: 'ring-resale', month: g.s.month, npc: buyer, needs: ['bell'], kind: 'normal', asked: true, status: 'waiting', phase: 'request', counterId: `ring-resale@${g.s.month}`, reason: '這次另備一件佩戴警示裝備。', minQuality: 0, traitRequired: null };
+  const v = { id: 'ring-resale', month: g.s.month, npc: buyer, needs: ['bell'], kind: 'normal', asked: true, status: 'waiting', phase: 'request', counterId: `ring-resale@${g.s.month}`, reason: '這次另備一件佩戴警示裝備。', minQuality: 0, traitRequired: null, contentKey: null, contextText: '' };
   g.s.visits.push(v); const debt = g.s.debt, coins = g.s.coins; g.npc({ type: 'sell', itemId: returnedRing.id });
   assert.equal((g.s.coins - coins) + (debt - g.s.debt), W.price(returnedRing)); next(g);
   assert.equal(g.s.items[returnedRing.id].episodes.at(-1).uses, 1); assert.equal(g.s.items[returnedRing.id].owner, buyer);
@@ -244,7 +244,7 @@ test('schema1 已再售物品不被終身使用旗標鎖住，遷移後新持有
 });
 test('既有同類裝備磨損退役後的新需求明說替換，不假裝第一次買', () => {
   const g = game(); intro(g); order(g, '銅'); next(g); while (W.activeVisit(g.s)) depart(g);
-  next(g); at(g, 'cen'); const v = W.activeVisit(g.s); assert.deepEqual(v.needs, ['staff']); assert.match(v.reason, /退役|替換/);
+  next(g); while (W.activeVisit(g.s)) depart(g); next(g); at(g, 'cen'); const v = W.activeVisit(g.s); assert.deepEqual(v.needs, ['staff']); assert.match(v.reason, /退役|替換/);
 });
 test('傳承特性需求實際產生、能推薦繼承品而拒絕無特性同類', () => {
   const { g, item } = returnedStaff(); g.s.npcs.shu.trust = 3; g.s.xp.craft = 9; g.do({ type: 'smelt', itemId: item.id }); const inherited = craft(g, 'staff');

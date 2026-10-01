@@ -1,15 +1,17 @@
 # 專案筆記
 
-v0.5、存檔 schema 2。純 HTML/CSS/JavaScript 與 Node 靜態伺服器，無依賴。規則見 SPEC.md。
+v0.6、schema 3。純 HTML/CSS/JavaScript + Node，無依賴。SPEC.md 為規則，CLOUD_QA.md 是兩條代表分支的實際操作與結果。
 
-engine.js 以 dispatch 原子修改。所有 NPC 動作需當前 visit ID 和 counterId；成交後 service 留人，leave 才換人，close 完成 service，但開場未採購必保留。每次 open 更新月 counter token，未完成 request 跨月。
+content.js 為原創九節點資料，瀏覽器先載入 content→engine→app，server 允許清單亦已增加 content.js。事件只在當月真實 use 後建立；content.events 是一次旗標兼使用證據，保存 key、actor、item／episode、month、branch、磨耗／結果快照與 news ID。不能因出售或信任回填已有效事件。
 
-六類皆為裝備。traits 為 light/solid/guard，效能推導、不重複存欄位；durability、maxDurability、repaired 實存。episodes 是每段持有期使用證據；usedEvent 只為遷移兼容，不能拿來阻止新持有者使用。故事需較早首次使用月。退役以磨耗為因，每件一次；回收須本人在櫃臺，庫存修復／熔鍊不需人。
+需求由真實使用節點、合用在用品與磨損引出，不再每月無限備用。拒單紀錄以 npc/recipe 月份儲存，冷卻一月；未處理 request 跨月，service 可接採購與送客。無新需求的 social service 輪替或因贈還到訪，短 contextText 說明目前狀態。
 
-schema 1 驗證器保留在 engine.js；tests/fixtures/engine-v1.cjs 是本專案 v0.4 原始引擎，用於真正舊存檔生成與遷移測試，不在頁面載入，也不是玩家存檔。維持舊 storage key，不重置進度；日期、交易額、歷史順序保留，新參數不捏造舊磨耗。
+recommendationReason 是唯一合用判斷來源；優先明說原退役者不買回同一物，再列用途／磨損／品質／特性。app 作品卡顯示短原因，顧客文案已 escape。其他在場 token、revision、任意合法正整數採購、開店結算、關店隱櫃、價表維持。
 
-已通過 33 項引擎＋9 項實際 app.js 的 Node DOM 狀態／事件測試，總共 42。涵蓋開關店去重、中斷、在場範圍、無採購數量上限、溢位、磨耗、故事證據、傳承效果、跨人再售、金鈴日常與委託、舊存檔等。這些不測 CSS 幾何或真正瀏覽器點擊。
+schema 1 先走保留的舊格式驗證與裝備映射，再進 schema 3；schema 2 先嚴格驗證，完整保留原參數／持有期／金額／待辦，新增空內容旗標與拒單紀錄，不虛構既往新內容。tests/fixtures/engine-v1.cjs 與 engine-v2.cjs 為本專案實際舊引擎，用於真存檔遷移測試，非玩家存檔、非瀏覽器資產。
 
-本輪遵從使用者指示，不啟動本機服務或瀏覽器。tests/browser.cjs 已更新新流程、只做語法檢查，不能稱 v0.5 UI 實測通過。使用者先前接受 v0.4 版面；v0.5 尺寸與狀態需 Pages 雲端復測。GAME_URL 指定 Pages 時不啟動本機遊戲服務。
+58 項測試全部通過：33 原引擎、14 新內容與兩條全流程、11 實際 app.js 最小 DOM／localStorage 狀態與事件。原 42 項保留；只更新冷卻／非固定購物、schema 3 和新存檔欄位帶來的舊測試假設，不刪核心回歸。兩條從新遊戲到第 6 月測得精良護腕普通 wear 2、傳承 solid wear 1；重載、跨主、未使用／缺料／拒單均驗證。
 
-Git／Pages 排除實際存檔、QA、秘密、個人主目錄。發布來源 main 根目錄 .nojekyll。D 槽原專案更新只同步遊戲與測試文件，保留 QA 和任何玩家資料，不重新開啟 localhost。不要套用 AGENTS 中啟動 server 的舊例行步驟覆蓋本輪明確停止要求。
+使用者明確禁止本機服務／瀏覽器操作，本輪保持關閉；AGENTS 舊例行 server 指令不得覆蓋。browser.cjs 只語法檢查，本批實際 CSS／滑鼠／鍵盤與兩分支由 Pages 雲端復測，不能宣稱非瀏覽器測試等於實玩。
+
+推送指定 repo main、Pages 根目錄 .nojekyll 已獲授權，保持可見性。不提交實際存檔、QA、秘密或個人主目錄。D 槽只同步版本來源／測試／文件，保留玩家資料。完成本批後停止擴張，交雲端確認。

@@ -8,7 +8,7 @@ const root = __dirname;
 const allowed = new Map([
   ['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']],
   ['/style.css', ['style.css', 'text/css']], ['/engine.js', ['engine.js', 'text/javascript']],
-  ['/app.js', ['app.js', 'text/javascript']], ['/build-info.json', ['build-info.json', 'application/json']]
+  ['/app.js', ['app.js', 'text/javascript']], ['/content.js', ['content.js', 'text/javascript']], ['/build-info.json', ['build-info.json', 'application/json']]
 ]);
 const server = http.createServer((req, res) => {
   const entry = allowed.get(new URL(req.url, `http://127.0.0.1:${port}`).pathname);

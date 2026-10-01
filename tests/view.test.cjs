@@ -91,3 +91,13 @@ test('同名同價推薦能從特性、耐久與傳承來源辨識，選項visit
   const v = view(g.s); assert.match(v.html(), /輕巧、堅固/); assert.match(v.html(), /傳承自木杖/); assert.match(v.html(), /第 1 件/); assert.match(v.html(), /第 2 件/);
   assert.equal(W.price(inherited), W.price(plain)); assert.match(v.html(), new RegExp(`data-visit="${current.id}"`));
 });
+test('原退役者不買回的真正原因顯示於作品卡，不泛稱品質或用途不符', async () => {
+  const { g, item } = returnedStaff(); g.do({ type: 'repair', itemId: item.id }); const v = view(g.s); await v.click({ tab: 'inventory' });
+  assert.match(text(v.html()), /阿岑已退役並贈還這一件，不再買回同一舊物/);
+  assert.match(text(v.html()), /其他使用者/); assert.doesNotMatch(v.html(), /data-action="[^"]+sell[^"]+item-1/);
+});
+test('成交後短對話說等待實際使用，沒有新購物操作，採購仍可辦理', () => {
+  const g = ready(); g.npc({ type: 'talk' }); const item = craft(g, 'bracer'); g.npc({ type: 'sell', itemId: item.id });
+  const v = view(g.s); assert.match(text(v.html()), /等真正用過再告訴你結果/); assert.doesNotMatch(v.html(), /id="recommend-item"/);
+  assert.match(v.html(), /委託小禾採購/); assert.equal(g.s.content.events.some(e => e.key === 'he-wrist'), false);
+});

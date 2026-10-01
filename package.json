@@ -1,13 +1,13 @@
 {
   "name": "birdsong-workshop",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "原創正體中文本機文字工坊遊戲",
   "scripts": {
     "start": "node server.cjs --open",
     "dev": "node server.cjs --open",
     "build": "node scripts/build.cjs",
-    "test": "node --test tests/engine.test.cjs tests/view.test.cjs",
+    "test": "node --test tests/engine.test.cjs tests/view.test.cjs tests/content.test.cjs",
     "test:ui": "node tests/browser.cjs"
   }
 }
