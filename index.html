@@ -5,20 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#213f54">
   <title>鳥信工坊｜溪岸的第一盞燈</title>
-  <link rel="stylesheet" href="style.css?v=0.6">
-  <script defer src="content.js?v=0.6"></script>
-  <script defer src="engine.js?v=0.6"></script>
-  <script defer src="app.js?v=0.6"></script>
+  <link rel="stylesheet" href="style.css?v=0.7">
+  <script defer src="content.js?v=0.7"></script>
+  <script defer src="engine.js?v=0.7"></script>
+  <script defer src="app.js?v=0.7"></script>
 </head>
 <body>
   <header class="masthead">
     <div class="brand"><span class="seal" aria-hidden="true">鳥</span><div><h1>鳥信工坊</h1><p>溪岸的第一盞燈</p></div></div>
     <div class="top-ledger" id="ledger" aria-label="工坊帳本"></div>
-    <div class="door-controls" id="door"></div>
   </header>
   <div id="notice" role="status" aria-live="polite" class="notice">工作臺已準備好。</div>
   <main id="app"></main>
-  <footer>原創文字工坊・本機保存 <span id="version">v0.6</span> <span id="save-status"></span></footer>
+  <footer>原創文字工坊・本機保存 <span id="version">v0.7</span> <span id="save-status"></span></footer>
   <dialog id="confirm-dialog"><form method="dialog"><h2 id="confirm-title"></h2><p id="confirm-copy"></p><div class="dialog-actions"><button value="cancel">取消</button><button id="confirm-yes" class="primary" value="yes">確定</button></div></form></dialog>
   <dialog id="info-dialog"><h2 id="info-title"></h2><div id="info-copy" class="info-copy"></div><form method="dialog" class="dialog-actions"><button class="primary">回到工坊</button></form></dialog>
   <input id="import-file" type="file" accept=".json,application/json" hidden>

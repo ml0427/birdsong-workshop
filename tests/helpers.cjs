@@ -13,6 +13,8 @@ function depart(g) { const v = W.activeVisit(g.s); if (v) g.npc({ type: v.phase 
 function at(g, npc) { while (W.activeVisit(g.s) && W.activeVisit(g.s).npc !== npc) depart(g); assert.equal(W.activeVisit(g.s)?.npc, npc); }
 function rejection(g, a, regex) { const before = W.exportSave(g.s); assert.throws(() => g.do(a), regex); assert.equal(W.exportSave(g.s), before); }
 function scoped(g, a) { const v = W.activeVisit(g.s); return { visitId: v?.id, counterId: v?.counterId, ...a }; }
-function returnedStaff() { const g = game(); const { staff } = intro(g); order(g, '銅'); next(g); next(g); at(g, 'cen'); g.npc({ type: 'reclaim', itemId: staff.id }); return { g, item: g.s.items[staff.id] }; }
+function explore(g, requestId = `explore-${g.s.seq}`) { return g.npc({ type: 'explore', requestId }); }
+function ready() { const g = game(); intro(g); explore(g); next(g); return g; }
+function returnedStaff() { const g = ready(); next(g); at(g, 'cen'); g.npc({ type: 'reclaim', itemId: 'item-1' }); return { g, item: g.s.items['item-1'] }; }
 
-module.exports = { game, craft, intro, order, next, depart, at, returnedStaff };
+module.exports = { game, craft, intro, order, explore, ready, next, depart, at, returnedStaff };

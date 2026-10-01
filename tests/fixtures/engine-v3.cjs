@@ -1,5 +1,5 @@
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./content.js') : root.WorkshopContent);
+  const api = factory(typeof module === 'object' && module.exports ? require('../../content.js') : root.WorkshopContent);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.Workshop = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (CONTENT) {
@@ -21,7 +21,6 @@
   };
   const PEOPLE = { cen: { name: '阿岑', role: '熟客' }, he: { name: '小禾', role: '重視個人防護的熟客' }, shu: { name: '望舒', role: '魔法裝備使用者' } };
   const QUALITY = ['樸實', '細緻', '精良'], QUALITY_PRICE = [14, 20, 26];
-  const CRAFT_MONTHS = { staff: 1, sword: 1, shield: 1, bracer: 1, amulet: 2, bell: 2 }, EXPLORATION_COST = 6;
   const MAX = Number.MAX_SAFE_INTEGER;
   const clone = s => JSON.parse(JSON.stringify(s));
   const fail = message => { throw new Error(message); };
@@ -29,28 +28,17 @@
   function add(a, b) { const n = a + b; if (!integer(n)) fail('數值超出安全整數範圍，未執行操作。'); return n; }
   function multiply(a, b) { const n = a * b; if (!integer(n)) fail('總價超出安全整數範圍，未執行採購。'); return n; }
   function initialState() {
-    return { schema: 4, revision: 0, month: 0, lastSettled: 0, open: false, coins: 20, debt: 0, seq: 0,
-      materials: { 木頭: 3, 鐵: 3, 銅: 0, 銀: 0, 金: 0 }, knownMaterials: ['木頭', '鐵'], explorations: [], commissions: [], legacyTaskIds: [], items: {}, xp: { craft: 0, appraisal: 0 }, reputation: 0,
+    return { schema: 3, revision: 0, month: 0, lastSettled: 0, open: false, coins: 20, debt: 0, seq: 0,
+      materials: { 木頭: 1, 鐵: 1, 銅: 0, 銀: 0, 金: 0 }, items: {}, xp: { craft: 0, appraisal: 0 }, reputation: 0,
       npcs: Object.fromEntries(Object.keys(PEOPLE).map(id => [id, { trust: 0, story: false, goldDone: false, storyItem: null }])),
       tutorial: { sold: [], ordered: false, delivered: false }, orders: [], visits: [], news: [], returns: [], legacies: [], content: emptyContent(),
-      log: ['師傅留下木頭與鐵各 3 個。先開始木杖和鐵劍，下次開店完成，熟客阿岑會來收。'] };
+      log: ['師傅留下木頭與鐵各一個。先做木杖和鐵劍，熟客阿岑會來收。'] };
   }
   const inventory = s => Object.values(s.items).filter(i => i.status === 'inventory');
   const owned = (s, npc) => Object.values(s.items).filter(i => i.status === 'owned' && i.owner === npc);
   const activeVisit = s => s.open ? s.visits.find(v => v.status === 'waiting') || null : null;
   const openingDone = s => ['staff', 'sword'].every(k => s.tutorial.sold.includes(k));
-  const knownMaterials = s => [...s.knownMaterials];
-  const nextUnknown = s => MATERIALS.find(m => !s.knownMaterials.includes(m)) || null;
-  function pendingTasks(s, npc) {
-    return [...s.orders.filter(o => o.npc === npc && o.status === 'pending').map(o => ({ id: o.id, label: '玩家請對方採購', due: o.due })), ...s.explorations.filter(e => e.npc === npc && e.status === 'pending').map(e => ({ id: e.id, label: '玩家請對方探索', due: e.due })), ...s.commissions.filter(c => c.npc === npc && !['delivered', 'cancelled'].includes(c.status)).map(c => ({ id: c.id, label: '對方請工坊製作', due: c.itemId ? s.items[c.itemId].dueMonth : null })), ...s.visits.filter(v => v.npc === npc && v.kind === 'commission' && v.status === 'waiting' && v.phase === 'request').map(v => ({ id: v.id, label: '對方的金鈴委託', due: null }))];
-  }
-  function requireFreeTask(s, npc) { if (pendingTasks(s, npc).length) fail(`${PEOPLE[npc].name}已有未完成委託，完成後才能接下一件；採購與探索共用這個限制。`); }
-  function knowledgeText(s, text) {
-    for (const [r, alias] of Object.entries({ bracer: '一種護腕', amulet: '一種護符', bell: '警示飾品' })) if (!s.knownMaterials.includes(RECIPES[r].material)) text = text.replaceAll(RECIPES[r].name, alias);
-    return text;
-  }
   function unlocked(s, id) {
-    if (!RECIPES[id] || !s.knownMaterials.includes(RECIPES[id].material)) return false;
     if (id === 'staff' || id === 'sword') return true;
     if (!s.tutorial.delivered) return false;
     return id === 'shield' || id === 'bracer' && s.xp.craft >= 2 || id === 'amulet' && (s.xp.craft >= 4 || s.reputation >= 3) || id === 'bell' && s.xp.craft >= 6 && s.reputation >= 5;
@@ -92,8 +80,6 @@
     if (!v) return '目前沒有顧客在櫃臺。';
     if (v.phase !== 'request') return '這次需求已辦妥，顧客暫時不再購物。';
     if (!i || i.status !== 'inventory') return '物品已不在工坊庫存。';
-    if (v.kind === 'delivery' && i.reservedFor !== v.commissionId) return '本人來領指定的委託成品，這件不是該份委託。';
-    if (i.reservedFor && (v.kind !== 'delivery' || v.commissionId !== i.reservedFor)) return `這件是${PEOPLE[s.commissions.find(c => c.id === i.reservedFor).npc].name}的製作委託成品，交付前不能一般出售。`;
     if (s.returns.some(o => o.itemId === i.id && o.npc === v.npc)) return `${PEOPLE[v.npc].name}已退役並贈還這一件，不再買回同一舊物；可推薦給其他使用者。`;
     if (!v.needs.includes(i.recipe)) return `目前需要${v.needs.map(r => RECIPES[r].name).join('或')}，這件的用途不同。`;
     if (i.durability <= 3) return `耐久只剩 ${i.durability}／${i.maxDurability}，先修復才能推薦。`;
@@ -134,7 +120,7 @@
     for (const def of CONTENT.EVENTS) {
       if (!eventEligible(s, def, i)) continue;
       const branch = def.branches.find(b => (b.strong === undefined || b.strong === result.strong) && (!b.trait || i.traits.includes(b.trait)));
-      const text = knowledgeText(s, branch.text.replace(/\{(actor|wear)\}/g, (_, key) => key === 'actor' ? PEOPLE[i.owner].name : String(result.wear)));
+      const text = branch.text.replace(/\{(actor|wear)\}/g, (_, key) => key === 'actor' ? PEOPLE[i.owner].name : String(result.wear));
       s.content.events.push({ key: def.id, month: s.month, npc: def.npc, actor: i.owner, itemId: i.id, episodeId: e.id, branch: branch.id, before, after: i.durability, score: result.score, wear: result.wear, newsId, text });
       narrative.push(`「${def.title}」${text}`);
     }
@@ -162,9 +148,6 @@
       const proof = eventDone(s, key);
       if (proof?.npc === npc) need(follow.recipe, follow.text, key);
     }
-    // Longer production must not let repeated replacements starve a new use.
-    const newUse = d => CONTENT.EVENTS.some(def => def.npc === npc && def.recipe === d.needs[0] && def.requires === d.contentKey && !eventDone(s, def.id));
-    candidates.sort((a, b) => Number(newUse(b)) - Number(newUse(a)));
     let d = candidates.find(d => !s.content.declined[npc][d.needs[0]] || s.month - s.content.declined[npc][d.needs[0]] >= 2);
     if (!d) return null;
     const recipe = d.needs[0];
@@ -188,20 +171,6 @@
       s.materials[o.material] = add(s.materials[o.material], o.quantity); o.status = 'delivered'; o.deliveredMonth = s.month;
       if (o.tutorial) s.tutorial.delivered = true;
       news(s, `delivery-${o.id}`, `${PEOPLE[o.npc].name}帶回 ${o.material} ${o.quantity} 個。採購款已在委託時記帳。`);
-    }
-    for (const e of s.explorations) {
-      if (e.status !== 'pending' || e.due > s.month) continue;
-      if (!s.knownMaterials.includes(e.material)) s.knownMaterials.push(e.material);
-      s.materials[e.material] = add(s.materials[e.material], 2); e.status = 'delivered'; e.deliveredMonth = s.month;
-      if (e.tutorial) s.tutorial.delivered = true;
-      news(s, `exploration-${e.id}`, `${PEOPLE[e.npc].name}探索帶回${e.material} 2 個。你辨識了新材料；可以採購它，相關配方由用途對話學習。`);
-    }
-    for (const i of Object.values(s.items)) {
-      if (i.status !== 'crafting' || i.dueMonth > s.month) continue;
-      i.status = 'inventory'; i.finishedMonth = s.month; s.xp.craft = add(s.xp.craft, 1);
-      if (i.reservedFor) s.commissions.find(c => c.id === i.reservedFor).status = 'ready';
-      history(s, i, `第 ${s.month} 月完工，${QUALITY[i.quality]}的${RECIPES[i.recipe].name}${i.reservedFor ? `保留給${PEOPLE[s.commissions.find(c => c.id === i.reservedFor).npc].name}` : '放上作品架'}。`);
-      news(s, `finished-${i.id}`, `${RECIPES[i.recipe].name}完工${i.reservedFor ? '，等待本人到櫃臺交貨，尚未出售' : '，可在作品架推薦'}。`, i.id);
     }
     for (const i of Object.values(s.items)) {
       if (i.status !== 'owned') continue;
@@ -229,26 +198,17 @@
     if (!openingDone(s) || !s.tutorial.ordered) addVisit(s, 'cen', ['staff', 'sword'].filter(k => !s.tutorial.sold.includes(k)), 'intro', {}, 'intro-cen');
     else if (s.tutorial.delivered) {
       for (const npc of ['he', 'cen', 'shu']) {
-        const commission = s.commissions.find(c => c.npc === npc && !['delivered', 'cancelled'].includes(c.status));
-        if (commission) {
-          if (commission.status === 'ready') addVisit(s, npc, [commission.recipe], 'delivery', { commissionId: commission.id, minQuality: commission.minQuality, traitRequired: commission.traitRequired, reason: '我來領先前委託工坊製作的裝備，當面交貨後才付款。' }, `delivery-${commission.id}-${s.month}`);
-          else addVisit(s, npc, [], 'normal', { contextText: commission.status === 'accepted' ? '製作委託還沒開始；缺材料時可以先準備，也可以當面取消未開工的委託。' : '裝備還在製作，我這次先看看進度，完工後再來領。' });
-          continue;
-        }
-        if (npc === 'he' && !s.knownMaterials.includes('銅')) { addVisit(s, npc, [], 'normal', { contextText: '我想找保護手臂的裝備。先探索新的材料線索，辨識後再談配方；有清單可以交給我。' }); continue; }
         if (npc === 'shu' && !unlocked(s, 'amulet')) continue;
         const d = demand(s, npc);
-        const goldCommission = npc === 'shu' && d?.needs[0] === 'bell' && eventDone(s, 'shu-amulet') && s.npcs.shu.trust >= 3 && s.reputation >= 3 && !s.npcs.shu.goldDone && !pendingTasks(s, npc).length;
-        if (goldCommission) d.reason += ' 這筆金鈴信任委託只一次另付 12 枚。';
-        if (d) addVisit(s, npc, d.needs, goldCommission ? 'commission' : 'normal', d);
+        const commission = npc === 'shu' && d?.needs[0] === 'bell' && eventDone(s, 'shu-amulet') && s.npcs.shu.trust >= 3 && s.reputation >= 3 && !s.npcs.shu.goldDone;
+        if (commission) d.reason += ' 這筆金鈴信任委託只一次另付 12 枚。';
+        if (d) addVisit(s, npc, d.needs, commission ? 'commission' : 'normal', d);
         else if (s.returns.some(o => o.npc === npc && o.status === 'offered') || (s.month + Object.keys(PEOPLE).indexOf(npc)) % 3 === 0) addVisit(s, npc, [], 'normal', { contextText: socialCopy(s, npc) });
       }
       for (const o of s.returns.filter(o => o.status === 'offered')) addVisit(s, o.npc, [], 'return');
     }
     for (const v of s.visits.filter(v => v.status === 'waiting')) v.counterId = `${v.id}@${s.month}`;
-    const pendingIds = new Set(Object.keys(PEOPLE).flatMap(npc => pendingTasks(s, npc).map(t => t.id)));
-    s.legacyTaskIds = s.legacyTaskIds.filter(id => pendingIds.has(id));
-    if (s.tutorial.delivered && inventory(s).length === 0 && !Object.values(s.items).some(i => i.status === 'crafting') && MATERIALS.every(m => s.materials[m] === 0) && !s.orders.some(o => o.status === 'pending') && !s.explorations.some(e => e.status === 'pending')) {
+    if (s.tutorial.delivered && inventory(s).length === 0 && MATERIALS.every(m => s.materials[m] === 0) && !s.orders.some(o => o.status === 'pending')) {
       s.materials.木頭 = 1; s.materials.鐵 = 1; news(s, `relief-${s.month}`, '阿岑送來木頭與鐵各一個作周轉：「先讓工作臺動起來，欠款可以慢慢還。」');
     }
     if (!s.news.some(n => n.month === s.month)) news(s, `month-${s.month}`, s.month === 1 ? '阿岑託魔法鳥帶來口信：「我來看看你的第一批作品。」' : '本月沒有新消息。');
@@ -257,42 +217,19 @@
   function tutorialStep(s) {
     if (!openingDone(s)) {
       const made = new Set(Object.values(s.items).map(i => i.recipe));
-      if (!made.has('staff') || !made.has('sword')) return { title: '開始木杖與鐵劍', text: '木頭與鐵各 3 個，先各開始一件。兩件都需 1 個月，材料充足必定成功。', step: 1 };
-      const waiting = Object.values(s.items).some(i => ['staff', 'sword'].includes(i.recipe) && i.status === 'crafting');
-      return { title: waiting ? '開店推進一月，完成武器' : s.open ? '把作品推薦給阿岑' : '開店迎接阿岑', text: waiting ? '準備月開始的兩件，下次開店就完成。營業中開始則先關店再開店；沒有現實等待。' : '兩件都由阿岑自己使用。逐件推薦即可。', step: 2 };
+      if (!made.has('staff') || !made.has('sword')) return { title: '製作木杖與鐵劍', text: '木頭與鐵各一個，分別做成木杖、鐵劍。製作不換月，也不會失敗。', step: 1 };
+      return { title: s.open ? '把作品推薦給阿岑' : '開店迎接阿岑', text: s.open ? '兩件都由阿岑自己使用。逐件推薦即可。' : '開店進入下一個月，阿岑會帶著需求來訪。', step: 2 };
     }
-    if (!s.tutorial.ordered) return { title: '交代第一份材料委託', text: '阿岑還在櫃臺。先託他探索新材料，也可以採購已知的木頭／鐵；下次開店交付。', step: 3 };
+    if (!s.tutorial.ordered) return { title: '交代採購清單', text: '阿岑還在櫃臺等清單。先委託銅 1 個，下次開店交付；提早關店也會保留這一步。', step: 3 };
     if (!s.tutorial.delivered) return { title: s.open ? '等下次開店到貨' : '開店收取材料', text: s.open ? '先關店，再開店收取材料與鳥信。關店不推進月份。' : '按開店即可，材料與鳥信會一起送到。', step: 4 };
     return { title: '小禾帶來新需求', text: '先聽用途，再做一件合用的裝備。', step: 5 };
   }
   function orderQuote(s, material, quantity) {
-    if (!s.knownMaterials.includes(material) || !integer(quantity, 1)) fail('採購數量請填正安全整數，且只能選已辨識材料；新材料先委託探索。');
+    if (!MATERIALS.includes(material) || !integer(quantity, 1)) fail('採購數量請填正安全整數，材料需在清單內。');
     const cost = multiply(COST[material], quantity); add(s.debt, Math.max(0, cost - s.coins));
     const reserved = s.orders.filter(o => o.status === 'pending' && o.material === material).reduce((n, o) => add(n, o.quantity), s.materials[material]);
     add(reserved, quantity); return cost;
   }
-  function startProduction(s, recipe, commission = null) {
-        const r = RECIPES[recipe]; if (!r || !unlocked(s, recipe)) fail('這份配方尚未學會。');
-        if (s.materials[r.material] < 1) fail(`需要 ${r.material} 1 個。可開店委託目前顧客採購。`);
-        const legacy = s.legacies.find(l => l.material === r.material && l.usedBy === null), id = `item-${s.seq = add(s.seq, 1)}`;
-        const quality = Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)), traits = [r.trait];
-        if (legacy) { for (const t of legacy.traits) if (!traits.includes(t) && traits.length < 2) traits.push(t); if (traits.length < 2) traits.push(r.trait === 'solid' ? 'guard' : 'solid'); }
-        if (commission && (quality < commission.minQuality || commission.traitRequired && !traits.includes(commission.traitRequired))) fail('目前製作條件未達客人要求，先練習或取得合適傳承，再開始這件委託。');
-        s.materials[r.material]--;
-        const i = s.items[id] = { id, recipe: recipe, material: r.material, quality, traits, durability: 9, maxDurability: 9, repaired: false, status: 'crafting', owner: null, createdMonth: s.month, soldMonth: null, appraised: false, usedEvent: false, retirementOffered: false, returned: false, legacy: legacy ? legacy.itemId : null, episodes: [], dueMonth: s.month + CRAFT_MONTHS[recipe], finishedMonth: null, reservedFor: commission ? commission.id : null, history: [] };
-        if (legacy) { legacy.usedBy = id; history(s, s.items[legacy.itemId], `特性傳承進入新作「${r.name}」，特性：${traitNames(i)}。`); }
-        history(s, i, `你開始製作${QUALITY[quality]}的${r.name}，特性：${traitNames(i)}${legacy ? `；將承接${RECIPES[s.items[legacy.itemId].recipe].name}的材料與特性` : ''}。`);
-        if (commission) { commission.itemId = id; commission.status = 'crafting'; }
-        return i;
-  }
-  function canStartCommission(s, c) {
-    const r = RECIPES[c.recipe], legacy = s.legacies.find(l => l.material === r.material && l.usedBy === null);
-    const traits = [r.trait];
-    if (legacy) { for (const t of legacy.traits) if (!traits.includes(t) && traits.length < 2) traits.push(t); if (traits.length < 2) traits.push(r.trait === 'solid' ? 'guard' : 'solid'); }
-    return s.materials[r.material] > 0 && Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)) >= c.minQuality && (!c.traitRequired || traits.includes(c.traitRequired));
-  }
-  function duplicateRequest(s, id) { return [...s.orders, ...s.explorations, ...s.commissions].some(t => t.requestId === id); }
-  function checkRequestId(id) { if (typeof id !== 'string' || !id || id.length > 100) fail('委託識別碼不正確。'); }
   function dispatch(state, a) {
     if (!a || typeof a.type !== 'string') fail('操作格式不正確。');
     if (a.expectedRevision !== undefined && a.expectedRevision !== state.revision) fail('這個操作已處理，請使用目前畫面的按鈕。');
@@ -307,30 +244,32 @@
         for (const v of s.visits.filter(v => v.status === 'waiting')) v.counterId = null;
         s.open = false; message = log(s, '關店。未完成的需求留到下次；可以繼續製作。'); break;
       case 'craft': {
-        const commission = a.commissionId ? s.commissions.find(c => c.id === a.commissionId && c.status === 'accepted') : null;
-        if (a.commissionId && !commission) fail('這份客人製作委託已開始或已結束。');
-        const i = startProduction(s, commission ? commission.recipe : a.recipe, commission);
-        message = log(s, `開始製作${RECIPES[i.recipe].name}，第 ${i.dueMonth} 月開店完工${commission ? `；保留給${PEOPLE[commission.npc].name}` : ''}。`); break;
+        const r = RECIPES[a.recipe]; if (!r || !unlocked(s, a.recipe)) fail('這份配方尚未學會。');
+        if (s.materials[r.material] < 1) fail(`需要 ${r.material} 1 個。可開店委託目前顧客採購。`);
+        const legacy = s.legacies.find(l => l.material === r.material && l.usedBy === null), id = `item-${s.seq = add(s.seq, 1)}`;
+        const quality = Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)), traits = [r.trait];
+        if (legacy) { for (const t of legacy.traits) if (!traits.includes(t) && traits.length < 2) traits.push(t); if (traits.length < 2) traits.push(r.trait === 'solid' ? 'guard' : 'solid'); }
+        s.materials[r.material]--;
+        const i = s.items[id] = { id, recipe: a.recipe, material: r.material, quality, traits, durability: 9, maxDurability: 9, repaired: false, status: 'inventory', owner: null, createdMonth: s.month, soldMonth: null, appraised: false, usedEvent: false, retirementOffered: false, returned: false, legacy: legacy ? legacy.itemId : null, episodes: [], history: [] };
+        if (legacy) { legacy.usedBy = id; history(s, s.items[legacy.itemId], `特性傳承進入新作「${r.name}」，特性：${traitNames(i)}。`); }
+        history(s, i, `你製作了${QUALITY[quality]}的${r.name}，特性：${traitNames(i)}${legacy ? `；承接${RECIPES[s.items[legacy.itemId].recipe].name}的材料與特性` : ''}。`);
+        s.xp.craft = add(s.xp.craft, 1); message = log(s, `${r.name}做好了。`); break;
       }
       case 'talk': {
         const v = scope(s, a); if (v.asked) fail('已經聽過這次需求了。');
         v.asked = true; s.npcs[v.npc].trust = add(s.npcs[v.npc].trust, 1); message = log(s, `${PEOPLE[v.npc].name}：「${requestDetail(v)}」`); break;
       }
-      case 'sell': case 'deliver': {
+      case 'sell': {
         const v = scope(s, a), i = s.items[a.itemId];
-        const commission = a.type === 'deliver' ? s.commissions.find(c => c.id === v.commissionId && c.status === 'ready') : null;
-        if (a.type === 'deliver' && (!commission || v.kind !== 'delivery' || commission.npc !== v.npc || commission.itemId !== a.itemId)) fail('這不是目前本人可領取的製作委託成品。');
-        if (a.type === 'sell' && v.kind === 'delivery') fail('這次是交付製作委託，請使用交付按鈕。');
         if (!i || i.status !== 'inventory') fail('這件物品已不在工坊庫存。');
         const reason = recommendationReason(s, i, v); if (reason) fail(`這件物品不符合需求：${reason}`);
-        const amount = price(i) + (v.kind === 'commission' || commission?.kind === 'commission' ? 12 : 0); income(s, amount); i.status = 'owned'; i.owner = v.npc; i.soldMonth = s.month; i.reservedFor = null;
-        if (commission) { commission.status = 'delivered'; commission.deliveredMonth = s.month; }
+        const amount = price(i) + (v.kind === 'commission' ? 12 : 0); income(s, amount); i.status = 'owned'; i.owner = v.npc; i.soldMonth = s.month;
         i.episodes.push({ id: i.episodes.length + 1, npc: v.npc, since: s.month, until: null, firstUsedMonth: null, lastUsedMonth: null, uses: 0 });
         history(s, i, `${PEOPLE[v.npc].name}買下並持有，支付 ${amount} 枚。`);
         s.npcs[v.npc].trust = add(s.npcs[v.npc].trust, 1); s.reputation = add(s.reputation, 1);
         if (v.kind === 'intro') { if (!s.tutorial.sold.includes(i.recipe)) s.tutorial.sold.push(i.recipe); v.needs = v.needs.filter(k => k !== i.recipe); } else v.needs = [];
         if (!v.needs.length) { v.phase = 'service'; v.contextText = '裝備收好了，等真正用過再告訴你結果；有採購清單可以交給我。'; }
-        if (v.kind === 'commission' || commission?.kind === 'commission') s.npcs[v.npc].goldDone = true;
+        if (v.kind === 'commission') s.npcs[v.npc].goldDone = true;
         message = log(s, `${PEOPLE[v.npc].name}買下${RECIPES[i.recipe].name}，收入 ${amount} 枚。商品已轉入持有紀錄；顧客還在櫃臺。`); break;
       }
       case 'decline': case 'leave': {
@@ -342,38 +281,11 @@
       }
       case 'order': {
         const v = scope(s, a); if (!openingDone(s)) fail('先把木杖與鐵劍交給阿岑，再託他採購。');
-        checkRequestId(a.requestId); if (duplicateRequest(s, a.requestId)) fail('這筆委託已接受，不會再扣款。');
-        requireFreeTask(s, v.npc);
+        if (typeof a.requestId !== 'string' || !a.requestId || a.requestId.length > 100) fail('訂單識別碼不正確。');
+        if (s.orders.some(o => o.requestId === a.requestId)) fail('這筆採購已委託，不會再扣款。');
         const cost = orderQuote(s, a.material, a.quantity), tutorial = !s.tutorial.ordered; charge(s, cost);
         s.orders.push({ id: `order-${s.seq = add(s.seq, 1)}`, requestId: a.requestId, npc: v.npc, material: a.material, quantity: a.quantity, cost, due: add(s.month, 1), status: 'pending', tutorial, deliveredMonth: null });
         s.tutorial.ordered = true; message = log(s, `委託${PEOPLE[v.npc].name}採購${a.material} ${a.quantity} 個，共 ${cost} 枚；第 ${s.month + 1} 月開店交付。`); break;
-      }
-      case 'explore': {
-        const v = scope(s, a); if (!openingDone(s)) fail('先把兩件開場作品交給阿岑，再探索。');
-        checkRequestId(a.requestId); if (duplicateRequest(s, a.requestId)) fail('這筆委託已接受，不會再扣款。');
-        requireFreeTask(s, v.npc); const material = nextUnknown(s);
-        if (!material) fail('目前這批材料都已辨識，沒有新的探索線索。');
-        if (s.explorations.some(e => e.status === 'pending' && e.material === material)) fail('這條材料線索已有人探索，等交付後再探索下一條。');
-        add(s.materials[material], 2); const tutorial = !s.tutorial.ordered; charge(s, EXPLORATION_COST);
-        s.explorations.push({ id: `explore-${s.seq = add(s.seq, 1)}`, requestId: a.requestId, npc: v.npc, material, due: add(s.month, 1), status: 'pending', cost: EXPLORATION_COST, tutorial, deliveredMonth: null });
-        s.tutorial.ordered = true; message = log(s, `請${PEOPLE[v.npc].name}探索一條未辨識材料線索，報酬 6 枚；下月開店帶回新材料。`); break;
-      }
-      case 'accept-commission': {
-        const v = scope(s, a);
-        if (v.phase !== 'request' || ['intro', 'delivery'].includes(v.kind)) fail('開場先開始兩把作品，或等本人來領已接受的委託；這裡沒有新製作委託。');
-        if (inventory(s).some(i => suitable(s, i, v))) fail('已有合適現貨，可直接推薦；這次不需要另接製作委託。');
-        if (pendingTasks(s, v.npc).some(t => t.id !== v.id)) fail(`${PEOPLE[v.npc].name}已有未完成委託，完成後才能接受下一件。`);
-        checkRequestId(a.requestId); if (duplicateRequest(s, a.requestId)) fail('這份製作委託已接受。');
-        const recipe = v.needs[0]; if (!unlocked(s, recipe)) fail('這件裝備的材料或配方尚未辨識，先探索，再接受可做的需求。');
-        const c = { id: `commission-${s.seq = add(s.seq, 1)}`, requestId: a.requestId, npc: v.npc, recipe, minQuality: v.minQuality, traitRequired: v.traitRequired, kind: v.kind, status: 'accepted', itemId: null, acceptedMonth: s.month, deliveredMonth: null };
-        s.commissions.push(c); v.needs = []; v.phase = 'service'; v.contextText = '製作委託記下了。完工後我會回店領取，交貨才付款。';
-        if (canStartCommission(s, c)) startProduction(s, recipe, c);
-        message = log(s, `接受${PEOPLE[v.npc].name}的${RECIPES[recipe].name}製作委託${c.status === 'crafting' ? `，已開工，第 ${s.items[c.itemId].dueMonth} 月完工` : '，先備材料或練習到符合品質，再開工'}；尚未出售。`); break;
-      }
-      case 'cancel-commission': {
-        const v = scope(s, a), c = s.commissions.find(c => c.id === a.commissionId && c.npc === v.npc && c.status === 'accepted');
-        if (!c) fail('只能當面取消這位客人尚未開工的委託。');
-        c.status = 'cancelled'; message = log(s, `當面取消${PEOPLE[v.npc].name}尚未開工的製作委託，沒有扣款或售出物品。`); break;
       }
       case 'appraise': {
         if (!canAppraise(s)) fail('先聽小禾說明品質需求，再做鑑定。');
@@ -401,13 +313,10 @@
       }
       default: fail('沒有這個操作。');
     }
-    const pendingIds = new Set(Object.keys(PEOPLE).flatMap(npc => pendingTasks(s, npc).map(t => t.id)));
-    s.legacyTaskIds = s.legacyTaskIds.filter(id => pendingIds.has(id));
     s.revision = add(s.revision, 1); validate(s); return { state: s, message };
   }
-  const validate = s => validateCore(s, 4);
+  const validate = s => validateCore(s, 3);
   const validateV2 = s => validateCore(s, 2);
-  const validateV3 = s => validateCore(s, 3);
   function validateCore(s, schema) {
     const check = (test, field) => { if (!test) fail(`存檔格式不正確：${field}`); };
     const str = (v, max = 1000) => typeof v === 'string' && v.length <= max;
@@ -427,7 +336,7 @@
       check(/^item-[1-9]\d*$/.test(id) && i && i.id === id, '物品識別'); highest = Math.max(highest, Number(id.split('-')[1]));
       check(Object.hasOwn(RECIPES, i.recipe) && i.material === RECIPES[i.recipe].material && integer(i.quality, 0, 2), '配方');
       check(traits(i.traits) && i.maxDurability === 9 && integer(i.durability, 0, i.maxDurability) && typeof i.repaired === 'boolean', '裝備參數');
-      check(['inventory', 'owned', 'smelted', ...(schema === 4 ? ['crafting'] : [])].includes(i.status) && (i.status === 'owned' ? Object.hasOwn(PEOPLE, i.owner) : i.owner === null), '持有者');
+      check(['inventory', 'owned', 'smelted'].includes(i.status) && (i.status === 'owned' ? Object.hasOwn(PEOPLE, i.owner) : i.owner === null), '持有者');
       check(integer(i.createdMonth, 0, s.month) && (i.soldMonth === null || integer(i.soldMonth, i.createdMonth, s.month)), '物品月份');
       check(['appraised', 'usedEvent', 'retirementOffered', 'returned'].every(k => typeof i[k] === 'boolean'), '物品事件');
       check(i.legacy === null || str(i.legacy, 50), '傳承');
@@ -453,7 +362,7 @@
     for (const m of MATERIALS) { const reserved = s.orders.filter(o => o.status === 'pending' && o.material === m).reduce((sum, o) => sum + o.quantity, s.materials[m]); check(integer(reserved), '材料預留溢位'); }
     check(s.seq >= highest && integer(highest), '序號');
     check(unique(s.visits, 'id') && unique(s.visits.filter(v => v.status === 'waiting'), 'npc'), '來客重複');
-    check(s.visits.every(v => v && str(v.id, 100) && Object.hasOwn(PEOPLE, v.npc) && integer(v.month, 1, s.month) && arr(v.needs) && v.needs.every(k => Object.hasOwn(RECIPES, k)) && ['intro', 'normal', 'commission', 'return', ...(schema === 4 ? ['delivery'] : [])].includes(v.kind) && ['waiting', 'done', 'declined'].includes(v.status) && ['request', 'service'].includes(v.phase) && typeof v.asked === 'boolean' && integer(v.minQuality, 0, 2) && str(v.reason) && (v.traitRequired === null || Object.hasOwn(TRAITS, v.traitRequired)) && (v.status !== 'waiting' || (v.phase === 'request' ? v.needs.length > 0 : v.needs.length === 0)) && (v.counterId === null || str(v.counterId, 130)) && (v.status !== 'waiting' || !s.open || v.counterId === `${v.id}@${s.month}`)), '需求');
+    check(s.visits.every(v => v && str(v.id, 100) && Object.hasOwn(PEOPLE, v.npc) && integer(v.month, 1, s.month) && arr(v.needs) && v.needs.every(k => Object.hasOwn(RECIPES, k)) && ['intro', 'normal', 'commission', 'return'].includes(v.kind) && ['waiting', 'done', 'declined'].includes(v.status) && ['request', 'service'].includes(v.phase) && typeof v.asked === 'boolean' && integer(v.minQuality, 0, 2) && str(v.reason) && (v.traitRequired === null || Object.hasOwn(TRAITS, v.traitRequired)) && (v.status !== 'waiting' || (v.phase === 'request' ? v.needs.length > 0 : v.needs.length === 0)) && (v.counterId === null || str(v.counterId, 130)) && (v.status !== 'waiting' || !s.open || v.counterId === `${v.id}@${s.month}`)), '需求');
     check(unique(s.news, 'id') && s.news.every(n => n && str(n.id, 100) && integer(n.month, 1, s.month) && str(n.text) && (n.itemId === null || Object.hasOwn(s.items, n.itemId))), '鳥信');
     check(unique(s.returns, 'itemId') && s.returns.every(o => o && Object.hasOwn(s.items, o.itemId) && Object.hasOwn(PEOPLE, o.npc) && ['offered', 'accepted'].includes(o.status) && integer(o.episodeId, 1) && s.items[o.itemId].episodes.some(e => e.id === o.episodeId && e.npc === o.npc) && (o.status !== 'offered' || s.items[o.itemId].status === 'owned' && s.items[o.itemId].owner === o.npc && episode(s.items[o.itemId]).id === o.episodeId)), '舊物贈還');
     check(unique(s.legacies, 'itemId') && s.legacies.every(l => l && Object.hasOwn(s.items, l.itemId) && s.items[l.itemId].status === 'smelted' && l.material === s.items[l.itemId].material && traits(l.traits) && (l.usedBy === null || Object.hasOwn(s.items, l.usedBy) && s.items[l.usedBy].legacy === l.itemId && s.items[l.usedBy].material === l.material)), '熔鍊傳承');
@@ -463,7 +372,7 @@
       const p = s.npcs[id];
       return p && integer(p.trust) && typeof p.story === 'boolean' && typeof p.goldDone === 'boolean' && (p.story ? Object.hasOwn(s.items, p.storyItem) && s.items[p.storyItem].episodes.some(e => e.npc === id && e.firstUsedMonth !== null && e.firstUsedMonth < s.month) : p.storyItem === null);
     }), '人物故事證據');
-    if (schema >= 3) {
+    if (schema === 3) {
       check(s.content && arr(s.content.events) && unique(s.content.events, 'key'), '內容節點');
       check(s.content.declined && Object.keys(PEOPLE).every(npc => s.content.declined[npc] && Object.keys(RECIPES).every(r => integer(s.content.declined[npc][r], 0, s.month))), '拒單紀錄');
       check(s.visits.every(v => (v.contentKey === null || CONTENT.EVENTS.some(def => def.id === v.contentKey)) && str(v.contextText)), '內容需求');
@@ -480,37 +389,6 @@
         check(record.score === result.score && record.wear === result.wear && record.branch === branch.id, '內容分支');
         check(s.news.some(n => n.id === record.newsId && n.month === record.month && n.itemId === record.itemId) && i.history.some(h => h.month === record.month && h.text.includes(record.text)), '內容情報');
       }
-    }
-    if (schema === 4) {
-      check(arr(s.knownMaterials) && s.knownMaterials.length >= 2 && s.knownMaterials.length <= 5 && s.knownMaterials.every((m, n) => m === MATERIALS[n]), '已辨識材料');
-      check(arr(s.explorations) && arr(s.commissions) && arr(s.legacyTaskIds) && new Set(s.legacyTaskIds).size === s.legacyTaskIds.length, '委託表');
-      const allJobs = [...s.orders, ...s.explorations, ...s.commissions];
-      check(unique(allJobs, 'id') && unique(allJobs, 'requestId'), '跨類委託重複');
-      check(unique(s.explorations, 'material'), '重複探索');
-      check(s.orders.every(o => s.knownMaterials.includes(o.material)), '採購材料知識');
-      for (const e of s.explorations) {
-        check(e && /^explore-[1-9]\d*$/.test(e.id) && str(e.requestId, 100) && e.requestId.length > 0 && Object.hasOwn(PEOPLE, e.npc) && MATERIALS.indexOf(e.material) >= 2 && e.cost === EXPLORATION_COST && integer(e.due, 1) && typeof e.tutorial === 'boolean' && ['pending', 'delivered'].includes(e.status), '探索');
-        check(e.status === 'pending' ? e.material === nextUnknown(s) && e.due > s.month && e.deliveredMonth === null : s.knownMaterials.includes(e.material) && integer(e.deliveredMonth, e.due, s.month), '探索交付');
-        highest = Math.max(highest, Number(e.id.split('-')[1]));
-      }
-      for (const c of s.commissions) {
-        check(c && /^commission-[1-9]\d*$/.test(c.id) && str(c.requestId, 100) && c.requestId.length > 0 && Object.hasOwn(PEOPLE, c.npc) && Object.hasOwn(RECIPES, c.recipe) && s.knownMaterials.includes(RECIPES[c.recipe].material) && integer(c.minQuality, 0, 2) && (c.traitRequired === null || Object.hasOwn(TRAITS, c.traitRequired)) && ['normal', 'commission', 'return'].includes(c.kind) && ['accepted', 'crafting', 'ready', 'delivered', 'cancelled'].includes(c.status) && integer(c.acceptedMonth, 1, s.month), '客人製作委託');
-        const i = c.itemId && s.items[c.itemId];
-        check(['accepted', 'cancelled'].includes(c.status) ? c.itemId === null && c.deliveredMonth === null : i && i.recipe === c.recipe && i.quality >= c.minQuality && (!c.traitRequired || i.traits.includes(c.traitRequired)), '委託成品');
-        if (c.status === 'crafting' || c.status === 'ready') check(i.reservedFor === c.id && i.status === (c.status === 'crafting' ? 'crafting' : 'inventory') && c.deliveredMonth === null, '成品保留');
-        if (c.status === 'delivered') check(integer(c.deliveredMonth, c.acceptedMonth, s.month) && i.episodes.some(e => e.npc === c.npc && e.since === c.deliveredMonth), '本人交貨');
-        highest = Math.max(highest, Number(c.id.split('-')[1]));
-      }
-      check(s.seq >= highest, '委託序號');
-      for (const i of Object.values(s.items)) {
-        check(i.status === 'crafting' ? integer(i.dueMonth, s.month + 1) && i.finishedMonth === null && i.episodes.length === 0 : integer(i.finishedMonth, i.createdMonth, s.month) && (i.dueMonth === null || integer(i.dueMonth, i.createdMonth + CRAFT_MONTHS[i.recipe], i.finishedMonth)), '製作工期');
-        check(i.soldMonth === null || i.finishedMonth !== null && i.soldMonth >= i.finishedMonth, '未完工不可售出');
-        check(i.reservedFor === null || s.commissions.some(c => c.id === i.reservedFor && c.itemId === i.id && ['crafting', 'ready'].includes(c.status)), '專屬成品');
-      }
-      for (const v of s.visits.filter(v => v.kind === 'delivery')) check(s.commissions.some(c => c.id === v.commissionId && c.npc === v.npc), '交貨來訪');
-      const pending = Object.keys(PEOPLE).flatMap(npc => pendingTasks(s, npc));
-      check(s.legacyTaskIds.every(id => pending.some(t => t.id === id)), '舊版委託保留');
-      for (const npc of Object.keys(PEOPLE)) { const jobs = pendingTasks(s, npc); check(jobs.length <= 1 || jobs.every(t => s.legacyTaskIds.includes(t.id)), '人物單一委託'); }
     }
     return true;
   }
@@ -621,23 +499,16 @@
   function migrateV2(old) {
     validateV2(old); const s = clone(old); s.schema = 3; s.content = emptyContent();
     for (const v of s.visits) { v.contentKey = null; v.contextText = ''; }
-    validateV3(s); return migrateV3(s);
-  }
-  function migrateV3(old) {
-    validateV3(old); const s = clone(old); s.schema = 4; s.knownMaterials = [...MATERIALS]; s.explorations = []; s.commissions = []; s.legacyTaskIds = [];
-    for (const i of Object.values(s.items)) { i.dueMonth = null; i.finishedMonth = i.createdMonth; i.reservedFor = null; }
-    for (const npc of Object.keys(PEOPLE)) { const tasks = pendingTasks(s, npc); if (tasks.length > 1) s.legacyTaskIds.push(...tasks.map(t => t.id)); }
     validate(s); return s;
   }
-  function exportSave(s) { validate(s); return JSON.stringify({ game: '鳥信工坊', schema: 4, state: s }, null, 2); }
+  function exportSave(s) { validate(s); return JSON.stringify({ game: '鳥信工坊', schema: 3, state: s }, null, 2); }
   function importSave(text) {
     if (typeof text !== 'string' || text.length > 8 * 1024 * 1024) fail('備份太大或格式不正確。');
     const d = JSON.parse(text);
-    if (!d || d.game !== '鳥信工坊' || ![1, 2, 3, 4].includes(d.schema) || !d.state || d.state.schema !== d.schema) fail('這不是鳥信工坊格式備份。');
+    if (!d || d.game !== '鳥信工坊' || ![1, 2, 3].includes(d.schema) || !d.state || d.state.schema !== d.schema) fail('這不是鳥信工坊格式備份。');
     if (d.schema === 1) return migrate(d.state);
     if (d.schema === 2) return migrateV2(d.state);
-    if (d.schema === 3) return migrateV3(d.state);
     validate(d.state); return clone(d.state);
   }
-  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, useResult, orderQuote, dispatch, validate, exportSave, importSave };
+  return { MATERIALS, COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, useResult, orderQuote, dispatch, validate, exportSave, importSave };
 });
