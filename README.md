@@ -1,4 +1,4 @@
-# 鳥信工坊 v0.3
+# 鳥信工坊 v0.4
 
 原創正體中文文字工坊遊戲。你是溪岸工坊的學徒，做合用的物品，聽熟客的需求，讓鳥信帶回物品的故事。無玩家戰鬥，製作必定成功，沒有倒數或每日限額。
 
@@ -26,10 +26,10 @@ node server.cjs --open
 ## 第一筆生意
 
 1. 用木頭 1 做木杖，用鐵 1 做鐵劍。現在仍是準備月 0。
-2. 開店進入第 1 月，詢問阿岑用途，把兩件都推薦給他。
+2. 開店進入第 1 月，聽阿岑的需求，把兩件都推薦給他。
 3. 委託阿岑採購，建議先訂銅 1；也可多訂木頭與鐵。
 4. 關店，再開店。材料與鳥信一起到來，小禾第一次需要銅澆水壺。
-5. 製作、鑑定、推薦，繼續接受新需求。製作經驗與聲望解鎖銀燈、金鈴。
+5. 先問小禾多一句，學做澆水壺與鑑定；完成需求後，繼續規劃採購。後續配方與功能會隨對話、故事和舊物逐步出現。
 
 提早關店不會結算、換月或清除需求，下次開店繼續。生活費與採購不足可記欠款，銷售先還款，不會結束遊戲。
 
@@ -52,7 +52,7 @@ node server.cjs --open
 ## 開發與驗證
 
 ```powershell
-node --test tests/engine.test.cjs
+node --test tests/engine.test.cjs tests/view.test.cjs
 node scripts/build.cjs
 node tests/browser.cjs
 ```
@@ -74,7 +74,7 @@ node tests/browser.cjs
 ```sh
 git clone https://github.com/ml0427/birdsong-workshop.git
 cd birdsong-workshop
-node --test tests/engine.test.cjs
+node --test tests/engine.test.cjs tests/view.test.cjs
 node server.cjs
 ```
 
@@ -87,3 +87,19 @@ CHROME_PATH=/absolute/path/to/chromium node tests/browser.cjs
 ```
 
 不要將新的 QA JSON 存檔、瀏覽器資料或秘密提交到 Git。
+
+## v0.4 工作臺與公開測試入口
+
+發布目標：**https://ml0427.github.io/birdsong-workshop/**。相對資產路徑適用 repository 子目錄；Pages 來源為 main 根目錄，使用 .nojekyll。
+
+桌面關鍵狀態集中頂欄，櫃臺與操作區並排，長清單分頁或只捲動工作區。介紹不再常駐，已完成的教學提示會消失。普通售價只依品質區分。
+
+**本輪已通過 27 項非瀏覽器測試與建置；尚未執行新版瀏覽器視覺／點擊驗證。** 1280×720、1366×768、1920×1080 的驗證工具已準備，等雲端在 Pages 實測。v0.3 的舊畫面驗證不能代表 v0.4 已通過。
+
+Pages 是另一個網址，無法直接讀取原本 localhost 的保存資料。如要搬移進度，先在原遊戲匯出備份，再到 Pages 匯入。Git 與 Pages 都不包含玩家存檔。
+
+既有 Chromium 的隔離測試也可指定發布入口（本輪未執行）：
+
+```sh
+GAME_URL=https://ml0427.github.io/birdsong-workshop/ CHROME_PATH=/absolute/path/to/chromium node tests/browser.cjs
+```

@@ -33,7 +33,7 @@ test('首次開店第 1 月；重複開店不換月不扣費；關店不結算',
 test('熟客可持有兩件；出售移出庫存；需求順序、對話與出售均去重', () => {
   const g = game(); const { staff, sword } = intro(g);
   assert.equal(W.inventory(g.s).length, 0); assert.equal(W.owned(g.s, 'cen').length, 2); assert.equal(W.activeVisit(g.s), null);
-  assert.equal(g.s.coins, 50); assert.equal(g.s.npcs.cen.trust, 3); assert.equal(g.s.reputation, 2);
+  assert.equal(g.s.coins, 40); assert.equal(g.s.npcs.cen.trust, 3); assert.equal(g.s.reputation, 2);
   rejectWithoutMutation(g, { type: 'sell', itemId: staff.id, visitId: 'intro-cen' }, /已處理/);
   assert.equal(g.s.items[sword.id].owner, 'cen');
 });
@@ -46,7 +46,7 @@ test('提早開店、教學中關店、存檔重載與跨月都保留需求，�
 });
 test('自然教學完整：兩件→熟客→採購→下月交貨情報→新需求', () => {
   const g = game(); assert.equal(W.tutorialStep(g.s).step, 1); intro(g); assert.equal(W.tutorialStep(g.s).step, 3);
-  order(g, '銅'); assert.equal(W.tutorialStep(g.s).step, 4); assert.equal(g.s.coins, 40); assert.equal(g.s.materials.銅, 0);
+  order(g, '銅'); assert.equal(W.tutorialStep(g.s).step, 4); assert.equal(g.s.coins, 30); assert.equal(g.s.materials.銅, 0);
   nextMonth(g); assert.equal(g.s.month, 2); assert.equal(g.s.materials.銅, 1); assert.equal(W.tutorialStep(g.s).step, 5);
   assert.equal(W.activeVisit(g.s).npc, 'he'); const watering = craft(g, 'watering'); sell(g, watering);
   assert.equal(W.activeVisit(g.s).npc, 'cen'); assert.equal(W.owned(g.s, 'he').length, 1);
@@ -107,9 +107,36 @@ test('舊物合理贈還後可再售、同一物保留原先持有者與使用�
 });
 test('鑑定每件一次、成長配方與品質確定，不耗月', () => {
   const g = game(); intro(g); order(g, '木頭', 5); nextMonth(g); const item = craft(g, 'stool');
+  g.do({ type: 'talk', visitId: W.activeVisit(g.s).id });
   g.do({ type: 'appraise', itemId: item.id }); assert.equal(g.s.xp.appraisal, 1); assert.equal(g.s.month, 2);
   rejectWithoutMutation(g, { type: 'appraise', itemId: item.id }, /已鑑定/);
   const second = craft(g, 'staff'); assert.equal(second.quality, 1); assert.equal(W.unlocked(g.s, 'lamp'), true);
+});
+test('同品質同售價，不因配方或材料加價；熟客保持中性身分', () => {
+  for (let quality = 0; quality <= 2; quality++) {
+    for (const recipe of Object.keys(W.RECIPES)) assert.equal(W.price({ recipe, quality }), W.QUALITY_PRICE[quality]);
+  }
+  assert.equal(W.PEOPLE.cen.role, '熟客');
+});
+test('第一次交貨不一次揭露配方或鑑定，需求對話才新增合用配方', () => {
+  const g = game(); intro(g); order(g, '銅'); nextMonth(g);
+  assert.deepEqual(W.visibleRecipes(g.s), ['staff', 'sword']); assert.equal(W.canAppraise(g.s), false);
+  const v = W.activeVisit(g.s); assert.equal(v.npc, 'he');
+  rejectWithoutMutation(g, { type: 'appraise', itemId: 'item-1' }, /品質需求/);
+  const detail = g.do({ type: 'talk', visitId: v.id }).message;
+  assert.match(detail, /接縫與品質/); assert.deepEqual(W.visibleRecipes(g.s), ['staff', 'sword', 'watering']);
+  assert.equal(W.canAppraise(g.s), true); assert.equal(W.visibleRecipes(g.s).includes('bell'), false);
+});
+test('採購教學依開關店狀態指示，舊格式存檔仍可重載接續', () => {
+  const g = game(); intro(g); order(g, '銅');
+  assert.match(W.tutorialStep(g.s).text, /先關店/); g.do({ type: 'close' });
+  assert.equal(W.tutorialStep(g.s).title, '開店收取材料'); assert.doesNotMatch(W.tutorialStep(g.s).text, /先關店/);
+  g.s = W.importSave(W.exportSave(g.s)); g.do({ type: 'open' }); W.validate(g.s);
+});
+test('新月只有具體事件，沒有事件則一筆簡短消息，不重複氣氛敘述', () => {
+  const g = game(); intro(g); order(g, '銅'); nextMonth(g);
+  assert.equal(g.s.news.some(n => n.month === 2 && n.id === 'month-2'), false);
+  nextMonth(g); assert.equal(g.s.news.find(n => n.id === 'month-3').text, '本月沒有新消息。');
 });
 test('欠款不結束或軟鎖；可記帳採購，銷售先還欠款', () => {
   const g = game(); intro(g); for (let n = 0; n < 8; n++) nextMonth(g);

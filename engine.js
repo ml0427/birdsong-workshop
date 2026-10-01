@@ -7,19 +7,20 @@
   const MATERIALS = ['木頭', '鐵', '銅', '銀', '金'];
   const COST = { 木頭: 3, 鐵: 6, 銅: 10, 銀: 16, 金: 24 };
   const RECIPES = {
-    staff: { name: '木杖', material: '木頭', tier: 1, kind: 'staff', price: 14, use: '行路與引導微光', symbol: '杖' },
-    sword: { name: '鐵劍', material: '鐵', tier: 2, kind: 'sword', price: 24, use: '巡路防身', symbol: '劍' },
-    stool: { name: '木凳', material: '木頭', tier: 1, kind: 'stool', price: 16, use: '菜圃歇腳', symbol: '凳' },
-    watering: { name: '銅澆水壺', material: '銅', tier: 3, kind: 'watering', price: 36, use: '照料菜圃', symbol: '壺' },
-    lamp: { name: '銀燈', material: '銀', tier: 4, kind: 'lamp', price: 56, use: '照亮圖書室', symbol: '燈' },
-    bell: { name: '金鈴', material: '金', tier: 5, kind: 'bell', price: 80, use: '提醒借書人', symbol: '鈴' }
+    staff: { name: '木杖', material: '木頭', tier: 1, kind: 'staff', use: '引導微光', symbol: '杖' },
+    sword: { name: '鐵劍', material: '鐵', tier: 2, kind: 'sword', use: '出門防身', symbol: '劍' },
+    stool: { name: '木凳', material: '木頭', tier: 1, kind: 'stool', use: '菜圃歇腳', symbol: '凳' },
+    watering: { name: '銅澆水壺', material: '銅', tier: 3, kind: 'watering', use: '照料菜圃', symbol: '壺' },
+    lamp: { name: '銀燈', material: '銀', tier: 4, kind: 'lamp', use: '照亮圖書室', symbol: '燈' },
+    bell: { name: '金鈴', material: '金', tier: 5, kind: 'bell', use: '提醒借書人', symbol: '鈴' }
   };
   const PEOPLE = {
-    cen: { name: '阿岑', role: '巡路人', greeting: '我認得師傅留下的招牌。今天，換你坐在工作臺前了。', story: '巡路時，我總記得替沿途的人留一盞光。你做的東西，讓這件事容易多了。' },
-    he: { name: '小禾', role: '菜圃照料者', greeting: '我想讓菜圃更好照顧。能替我挑一件實用的嗎？', story: '收成好的時候，我把多的菜分給鄰居。工坊的壺也幫上忙了。' },
-    shu: { name: '望舒', role: '圖書室管理者', greeting: '晚間有人來借書。我需要一件能讓圖書室好用些的物品。', story: '以前夜裡只剩我守著書。現在燈亮了，來讀書的人也多了。' }
+    cen: { name: '阿岑', role: '熟客', greeting: '我來看看你的第一批作品。', story: '帶著你做的東西出門，路上省心多了。回來時，也想先向你說一聲。' },
+    he: { name: '小禾', role: '菜圃照料者', greeting: '你好，我是小禾。', story: '收成好的時候，我把多的菜分給鄰居。工坊的壺也幫上忙了。' },
+    shu: { name: '望舒', role: '圖書室管理者', greeting: '你好，我是望舒。', story: '以前夜裡只剩我守著書。現在燈亮了，來讀書的人也多了。' }
   };
   const QUALITY = ['樸實', '細緻', '精良'];
+  const QUALITY_PRICE = [14, 20, 26];
   const clone = s => JSON.parse(JSON.stringify(s));
   const fail = message => { throw new Error(message); };
   const integer = (v, min = 0, max = 1e9) => Number.isSafeInteger(v) && v >= min && v <= max;
@@ -46,7 +47,17 @@
     if (id === 'bell') return s.xp.craft >= 6 && s.reputation >= 5;
     return false;
   }
-  function price(item) { return RECIPES[item.recipe].price + item.quality * 6; }
+  function price(item) { return QUALITY_PRICE[item.quality]; }
+  function canAppraise(s) { return s.tutorial.delivered && s.visits.some(v => v.npc === 'he' && v.asked); }
+  function visibleRecipes(s) {
+    const learned = new Set(['staff', 'sword', ...Object.values(s.items).map(i => i.recipe)]);
+    for (const visit of s.visits) if (visit.asked) for (const recipe of visit.needs) learned.add(recipe);
+    return Object.keys(RECIPES).filter(id => learned.has(id) && unlocked(s, id));
+  }
+  function requestDetail(visit) {
+    if (visit.kind === 'intro') return '木杖照亮路，鐵劍護身。我會兩件一起帶著。';
+    return { watering: '想替嫩芽慢慢澆水。請做銅澆水壺，再替我看看接縫與品質。', stool: '整理種子時坐的木凳，不用很大，穩當就好。', staff: '這次要走夜路，木杖的微光就夠用了。', sword: '想帶一把鐵劍護身，握起來順手就好。', lamp: '夜裡讀字容易累眼。銀燈放在書桌上，光柔和些就好。', bell: '鈴聲要讓孩子們聽見，金鈴做好後我們試一聲。' }[visit.needs[0]] || '照這個用途做就好。';
+  }
   function suitable(s, item, visit = activeVisit(s)) {
     return !!visit && item.status === 'inventory' && visit.needs.includes(RECIPES[item.recipe].kind);
   }
@@ -78,8 +89,8 @@
       if (!item.usedEvent && s.month > item.soldMonth) {
         item.usedEvent = true;
         const results = {
-          staff: '沿溪巡路時，木杖的微光指引了一位迷路的旅人。',
-          sword: '巡路時用鐵劍擋開了闖進道路的魔物，平安回來。',
+          staff: '夜裡出門時，木杖的微光照亮了回家的路。',
+          sword: '途中遇到魔物時，用鐵劍護身，平安回來。',
           stool: '在菜圃歇腳整理種子，忙碌的一天舒緩不少。',
           watering: '用銅澆水壺照料菜圃，第一排嫩芽已經長出來了。',
           lamp: '銀燈照亮了圖書室，晚間也有人安心讀書。',
@@ -94,7 +105,7 @@
         news(s, `retire-${item.id}`, `${person.name}來信：「${RECIPES[item.recipe].name}」已完成這段工作。我換用了手邊的備用品，願把舊物贈回工坊，讓它再派上用場。你接受後，我才送交。`, item.id);
       }
     }
-    news(s, `month-${s.month}`, s.month === 1 ? '魔法鳥停在窗沿：溪岸工坊重新亮起燈了。今天先等阿岑上門。' : `魔法鳥送來第 ${s.month} 月的消息：溪岸的人們仍在過日子，舊物也繼續留下故事。`);
+    if (!s.news.some(n => n.month === s.month)) news(s, `month-${s.month}`, s.month === 1 ? '阿岑託魔法鳥帶來口信：「我來看看你的第一批作品。」' : '本月沒有新消息。');
     if (!openingDone(s)) addVisit(s, 'cen', ['staff', 'sword'].filter(k => !s.tutorial.sold.includes(k)), 'intro', 'intro-cen');
     else if (s.tutorial.delivered) {
       // Persistent waiting requests take precedence; no duplicate person in the queue.
@@ -115,12 +126,12 @@
   function tutorialStep(s) {
     if (!openingDone(s)) {
       const made = new Set(Object.values(s.items).map(i => i.recipe));
-      if (!made.has('staff') || !made.has('sword')) return { title: '先做兩件，讓工坊亮起來', text: '師傅只留了木頭與鐵各一個。用工作臺做一把木杖、一把鐵劍；製作不會換月。', step: 1 };
-      return { title: '把兩件作品推薦給阿岑', text: s.open ? '阿岑自己會用這兩件物品。他先說用途，你再逐件推薦；同一人可以持有多件。' : '按「開店」進入下一個月。阿岑會帶著需求來訪，請逐件推薦木杖與鐵劍。', step: 2 };
+      if (!made.has('staff') || !made.has('sword')) return { title: '製作木杖與鐵劍', text: '木頭與鐵各一個，分別做木杖、鐵劍。製作不會換月，也不會失敗。', step: 1 };
+      return { title: s.open ? '把兩件作品推薦給阿岑' : '開店迎接阿岑', text: s.open ? '這兩件都由阿岑自己使用。逐件推薦即可。' : '按開店進入下一個月，阿岑會帶著需求來訪。', step: 2 };
     }
-    if (!s.tutorial.ordered) return { title: '託阿岑帶回下一批材料', text: '現在可以委託採購了。先訂銅 1 個做澆水壺，也可多訂木頭或鐵；交付在下一次開店。', step: 3 };
-    if (!s.tutorial.delivered) return { title: '關店，再開店迎接下個月', text: '製作不會推進交貨。關店只停止接客，再按開店才換月；魔法鳥會同時送來人物近況。', step: 4 };
-    return { title: '你的工坊，開始留下故事', text: '讀一封鳥信，聽新顧客的需求，再製作適合的物品。採購、鑑定、收藏與舊物傳承都已開放。', step: 5 };
+    if (!s.tutorial.ordered) return { title: '交代採購清單', text: '阿岑願意幫你買材料。先委託銅 1 個，下次開店交付。', step: 3 };
+    if (!s.tutorial.delivered) return { title: s.open ? '等下次開店交貨' : '開店收取材料', text: s.open ? '先關店，再開店換月、收材料與鳥信。關店本身不換月。' : '按開店換月，材料與鳥信會一起送到。', step: 4 };
+    return { title: '小禾帶來新需求', text: '先聽小禾的需求，再學做一件合用的工具。', step: 5 };
   }
   function dispatch(state, action) {
     if (!action || typeof action.type !== 'string') fail('操作格式不正確。');
@@ -147,14 +158,14 @@
         s.items[id] = { id, recipe: action.recipe, material: r.material, quality, status: 'inventory', owner: null, createdMonth: s.month, soldMonth: null, appraised: false, usedEvent: false, retirementOffered: false, returned: false, legacy: legacy ? legacy.itemId : null, history: [] };
         if (legacy) { legacy.usedBy = id; history(s, s.items[legacy.itemId], `熔鍊傳承進入新作 ${id}「${r.name}」。`); }
         history(s, s.items[id], `你製作了${QUALITY[quality]}的${r.name}${legacy ? `，承接 ${legacy.itemId} 的材料記憶` : ''}。`);
-        s.xp.craft++; message = log(s, `${r.name}製作成功，品質「${QUALITY[quality]}」。`); break;
+        s.xp.craft++; message = log(s, `${r.name}做好了。`); break;
       }
       case 'talk': {
         const visit = activeVisit(s);
         if (!visit || visit.id !== action.visitId) fail('這位顧客目前沒有在櫃臺。');
         if (visit.asked) fail('已經聽過這次需求了。');
         visit.asked = true; s.npcs[visit.npc].trust++;
-        message = log(s, `${PEOPLE[visit.npc].name}：「${visit.kind === 'intro' ? '木杖用來照亮路，鐵劍是巡路時防身。我會一起帶著。' : `我想要${visit.needs.map(k => RECIPES[k].use).join('、')}，合用比華麗更重要。`}」信任增加。`); break;
+        message = log(s, `${PEOPLE[visit.npc].name}：「${requestDetail(visit)}」`); break;
       }
       case 'sell': {
         const visit = activeVisit(s), item = s.items[action.itemId];
@@ -195,13 +206,13 @@
         message = log(s, `委託阿岑採購${action.material} ${action.quantity} 個，共 ${cost} 枚；第 ${s.month + 1} 月開店交付。`); break;
       }
       case 'appraise': {
-        if (!s.tutorial.delivered) fail('先完成第一次採購交付，再學鑑定。');
+        if (!canAppraise(s)) fail('先聽小禾說明品質需求，再學鑑定。');
         const item = s.items[action.itemId];
         if (!item || item.status !== 'inventory') fail('只可鑑定工坊持有的實物。');
         if (item.appraised) fail('這件物品已鑑定，不重複增加經驗。');
         item.appraised = true; s.xp.appraisal++;
         history(s, item, `你鑑定了物品：${item.material}，第 ${RECIPES[item.recipe].tier} 階，${QUALITY[item.quality]}品質。`);
-        message = log(s, `鑑定完成：${RECIPES[item.recipe].name}品質為「${QUALITY[item.quality]}」，適合${RECIPES[item.recipe].use}。`); break;
+        message = log(s, `鑑定：${RECIPES[item.recipe].name}為「${QUALITY[item.quality]}」，${item.material}第 ${RECIPES[item.recipe].tier} 階，${item.returned ? '使用過，仍可合用' : '完好的新作'}。`); break;
       }
       case 'reclaim': {
         const offer = s.returns.find(o => o.itemId === action.itemId && o.status === 'offered');
@@ -278,5 +289,5 @@
     if (!data || data.game !== '鳥信工坊' || data.schema !== 1) fail('這不是鳥信工坊 v1 格式備份。');
     validate(data.state); return clone(data.state);
   }
-  return { MATERIALS, COST, RECIPES, PEOPLE, QUALITY, initialState, inventory, owned, activeVisit, openingDone, unlocked, price, suitable, tutorialStep, dispatch, validate, exportSave, importSave };
+  return { MATERIALS, COST, RECIPES, PEOPLE, QUALITY, QUALITY_PRICE, initialState, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, tutorialStep, dispatch, validate, exportSave, importSave };
 });

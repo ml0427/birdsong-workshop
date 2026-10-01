@@ -7,6 +7,7 @@ const { spawn } = require('node:child_process');
 const W = require('../engine.js');
 const root = path.resolve(__dirname, '..'), qa = path.join(root, 'qa');
 const port = Number(process.env.QA_PORT || 4328);
+const gameUrl = process.env.GAME_URL || `http://127.0.0.1:${port}`;
 const chrome = process.env.CHROME_PATH || path.join(process.env.LOCALAPPDATA || path.join(require('node:os').homedir(), 'AppData', 'Local'), 'ms-playwright', 'chromium_headless_shell-1228', 'chrome-headless-shell-win64', 'chrome-headless-shell.exe');
 const profile = path.join(qa, 'browser-profile', `run-${Date.now()}`);
 const delay = ms => new Promise(r => setTimeout(r, ms));
@@ -20,9 +21,11 @@ async function waitUntil(fn, description, ms = 10000) {
 function pass(name) { reports.push(name); console.log('PASS ' + name); }
 async function main() {
   fs.mkdirSync(profile, { recursive: true });
-  server = spawn(process.execPath, ['server.cjs'], { cwd: root, env: { ...process.env, PORT: String(port) }, windowsHide: true, stdio: 'ignore' });
-  await waitUntil(async () => { try { return (await fetch(`http://127.0.0.1:${port}`)).ok; } catch (e) { return false; } }, 'local server');
-  const blocked = await fetch(`http://127.0.0.1:${port}/SPEC.md`); assert.equal(blocked.status, 404);
+  if (!process.env.GAME_URL) {
+    server = spawn(process.execPath, ['server.cjs'], { cwd: root, env: { ...process.env, PORT: String(port) }, windowsHide: true, stdio: 'ignore' });
+    await waitUntil(async () => { try { return (await fetch(gameUrl)).ok; } catch (e) { return false; } }, 'local server');
+    const blocked = await fetch(`http://127.0.0.1:${port}/SPEC.md`); assert.equal(blocked.status, 404);
+  }
   const browserLog = fs.openSync(path.join(qa, 'chromium.log'), 'w');
   browser = spawn(chrome, ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--remote-debugging-port=0', '--remote-allow-origins=*', `--user-data-dir=${profile}`, 'about:blank'], { windowsHide: true, stdio: ['ignore', 'ignore', browserLog] });
   const activePort = path.join(profile, 'DevToolsActivePort');
@@ -54,14 +57,27 @@ async function main() {
   };
   const clickTab = async tab => { assert(await evaluate(`(() => { const el = document.querySelector('[data-tab="${tab}"]'); if(!el) return false; el.click(); return true; })()`), 'tab ' + tab); };
   const screenshot = async name => { const { data } = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }); fs.writeFileSync(path.join(qa, name), Buffer.from(data, 'base64')); };
+  const desktopChecks = async (phase, buttons = []) => {
+    for (const [width, height] of [[1280, 720], [1366, 768], [1920, 1080]]) {
+      await cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+      const geometry = await evaluate(`(() => { const selectors=${JSON.stringify(buttons)}; return { page:document.documentElement.scrollHeight, viewport:innerHeight, width:document.documentElement.scrollWidth, innerWidth, overflow:getComputedStyle(document.body).overflowY, controls:selectors.map(selector=>{const b=document.querySelector(selector); if(!b) return {selector,missing:true}; const r=b.getBoundingClientRect();return {selector,x:r.x,y:r.y,right:r.right,bottom:r.bottom,height:r.height,hit:!!document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')};})}; })()`);
+      assert(geometry.page <= height + 1, `${phase} ${width}x${height}: whole-page scroll (${geometry.page})`);
+      assert(geometry.width <= width, `${phase}: horizontal overflow`);
+      assert.notEqual(geometry.overflow, 'hidden', 'page overflow must not hide controls');
+      for (const control of geometry.controls) assert(!control.missing && control.x >= 0 && control.y >= 0 && control.right <= width + 1 && control.bottom <= height + 1 && control.height >= 44 && control.hit, JSON.stringify(control));
+      await screenshot(`desktop-${phase}-${width}x${height}.png`);
+    }
+    pass(`${phase}：1280×720、1366×768、1920×1080 無整頁捲動，主要按鈕可見可點`);
+  };
   await cdp('Page.enable'); await cdp('Runtime.enable');
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
-  await cdp('Page.navigate', { url: `http://127.0.0.1:${port}` }); await ready();
+  await cdp('Page.navigate', { url: gameUrl }); await ready();
   await evaluate('localStorage.clear(); location.reload()'); await ready();
   assert.equal(await evaluate('document.documentElement.lang'), 'zh-Hant');
   assert.equal(await evaluate('document.querySelectorAll("[data-tab]").length'), 3);
   assert(!await evaluate('document.body.innerText.includes("委託採購")'));
   await screenshot('01-first-screen-desktop.png');
+  await desktopChecks('opening', ['[data-action*="staff"]', '[data-action*="sword"]', '[data-action*="open"]']);
   pass('首屏只顯示教學、兩個配方與基本功能；正體中文語言設定');
   await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), 'no mobile horizontal overflow');
@@ -80,6 +96,7 @@ async function main() {
   assert(!await evaluate('document.querySelector("[data-action*=staff]") && !document.querySelector("[data-action*=staff]").disabled'));
   await clickAction('open', {}, true); let s = await snapshot(); assert.equal(s.month, 1); assert.equal(s.coins, 12);
   await clickAction('talk', {}, true); assert.equal((await snapshot()).npcs.cen.trust, 1);
+  await desktopChecks('customer', ['.counter [data-action*="sell"]', '[data-action*="close"]']);
   await clickAction('sell', { itemId: 'item-1' }, true); s = await snapshot(); assert.equal(s.items['item-1'].owner, 'cen'); assert.equal(s.tutorial.sold.length, 1);
   await clickAction('close'); const beforeReload = await snapshot(); await cdp('Page.reload'); await ready(); assert.deepEqual(await snapshot(), beforeReload);
   await clickAction('open'); assert.equal((await snapshot()).month, 2);
@@ -92,8 +109,11 @@ async function main() {
   s = await snapshot(); assert.equal(s.orders.length, 1); assert.equal(s.orders[0].status, 'pending');
   await clickAction('close'); await clickAction('open'); s = await snapshot(); assert.equal(s.month, 3); assert.equal(s.orders[0].status, 'delivered'); assert.equal(s.materials.銅, 1);
   assert(s.news.some(n => n.id === 'use-item-1')); assert.equal(W.activeVisit(s).npc, 'he');
+  assert.deepEqual(W.visibleRecipes(s), ['staff', 'sword']); assert.equal(W.canAppraise(s), false);
+  await clickAction('talk');
   await screenshot('03-new-demand-and-bird-mail.png');
   await clickTab('craft'); await clickAction('craft', { recipe: 'watering' });
+  await desktopChecks('new-demand', ['.counter [data-action*="sell"]']);
   await clickTab('inventory'); await clickAction('appraise'); assert.equal((await snapshot()).xp.appraisal, 1);
   await clickAction('sell'); s = await snapshot(); assert.equal(s.items['item-4'].owner, 'he'); assert.equal(W.activeVisit(s).npc, 'cen');
   pass('介面拒絕小數採購；訂單只扣一次、下月只交一次；新顧客、製作、鑑定及交易完整');
@@ -121,9 +141,10 @@ async function main() {
   await evaluate('document.getElementById("confirm-yes").click()'); await delay(50); assert.equal((await snapshot()).items['item-1'].status, 'smelted');
   await clickTab('craft'); await clickAction('craft', { recipe: 'staff' }); s = await snapshot();
   assert.equal(Object.values(s.items).at(-1).legacy, 'item-1'); await clickTab('collection');
-  assert(await evaluate('document.body.innerText.includes("已熔鍊") && document.body.innerText.includes("承接 item-1")'));
+  assert(await evaluate('document.body.innerText.includes("已熔鍊") && document.body.innerText.includes("承接木杖")'));
   await evaluate('[...document.querySelectorAll("#panel details")].forEach(el => el.open=true)');
   await screenshot('04-legacy-collection.png');
+  await desktopChecks('collection', ['[data-tab="craft"]', '[data-tab="collection"]']);
   await cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   assert(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'));
   await screenshot('05-collection-mobile.png');
@@ -141,7 +162,7 @@ async function main() {
   pass('主存檔損壞時會復原上一筆備份，下一次操作可正常再保存');
   assert.equal(exceptions.length, 0, 'no unhandled browser errors');
   pass('後期進度重載完全一致，沒有未處理的瀏覽器例外');
-  const result = { status: 'passed', checks: reports, exceptions, month: (await snapshot()).month, browser: chrome, localOnly: true, screenshots: fs.readdirSync(qa).filter(n => n.endsWith('.png')), finishedAt: new Date().toISOString() };
+  const result = { status: 'passed', checks: reports, exceptions, month: (await snapshot()).month, browser: chrome, gameUrl, isolatedProfile: true, screenshots: fs.readdirSync(qa).filter(n => n.endsWith('.png')), finishedAt: new Date().toISOString() };
   fs.writeFileSync(path.join(qa, 'browser-report.json'), JSON.stringify(result, null, 2));
 }
 main().catch(error => { console.error(error); fs.mkdirSync(qa, { recursive: true }); fs.writeFileSync(path.join(qa, 'browser-report.json'), JSON.stringify({ status: 'failed', checks: reports, exceptions, error: error.stack }, null, 2)); process.exitCode = 1; }).finally(async () => {
