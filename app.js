@@ -48,7 +48,7 @@
       2: Object.values(state.items).some(i => i.status === 'crafting') ? '按開店換月才推進工期；營業中先關店再開店。' : '聽阿岑的用途，再逐件推薦完成的兩把武器。',
       3: '託阿岑探索新材料，或採購已知材料；他同時只能接一件。',
       4: state.open ? '關店，再開店收材料與鳥信。' : '按開店收取材料與鳥信。',
-      5: '聽用途、做合用商品、推薦，再規劃下批採購。'
+      5: '聽用途、接委託或開始作品；完工再交易。'
     }[t.step];
   }
   function itemLabel(i) { return W.RECIPES[i.recipe].name; }
@@ -115,13 +115,13 @@
     return `<div class="section-head"><h2>收藏簿</h2></div><p class="stats">製作 ${items.length} 件 · 配方 ${new Set(items.map(i => i.recipe)).size}／6 種 · 熔鍊 ${state.legacies.length} 件 · 鑑定 ${state.xp.appraisal}</p><div class="list panel-scroll">${page.items.map(i => itemCard(i, true)).join('') || '<p class="empty">製作第一件作品，收藏簿就會開始記錄。</p>'}</div>${page.pager}`;
   }
   function renderSettings() {
-    return `<div class="section-head"><h2>保存與備份</h2></div><div class="settings panel-scroll"><p>操作後自動保存在這個瀏覽器。清除瀏覽器資料會移除進度，請定期匯出備份。</p>${saveProblem ? `<p class="save-warning">${escape(saveProblem)}</p>` : ''}<div class="actions"><button data-tool="export" class="primary">匯出 JSON 備份</button><button data-tool="import">匯入備份</button><button data-tool="raw">匯出原始存檔</button><button data-tool="new" class="danger">重新開始</button></div><p class="help">匯入與重新開始會取代目前進度，確認前可取消。</p><details class="rules"><summary>查看工坊規則</summary><h3>時間與款項</h3><p>開店前進一個月，收取交貨與鳥信，支付生活費 8 枚。關店不換月；兩種狀態都能製作。採購與贈還只能向當前櫃臺人物辦理；辦完送客才換下一位。款項不足先記欠款，銷售所得優先還款。</p><h3>製作</h3><p>開始製作扣材料，簡單裝備 1 個月、護符與金鈴 2 個月；只在開店換月推進，必定完成。沒有工時額度或製作容量限制。${W.knownMaterials(state).join('、')}是目前辨識的材料；新材料經探索逐步發現。物品售價只按品質區分：樸實 14、細緻 20、精良 26 枚。</p><h3>裝備與傳承</h3><p>鑑定後顯示效能與耐久。輕巧提升效能；堅固減少磨耗；護身改善防護使用結果。NPC 實際使用才磨耗，磨損後當面贈還；每件可免費練習修復一次，或熔鍊把特性傳給同材質新作，最多兩個。</p><h3>保存</h3><p>固定使用同一網址與瀏覽器。匯入會先驗證備份；壞檔不覆蓋目前進度。</p></details></div>`;
+    return `<div class="section-head"><h2>保存與備份</h2></div><div class="settings panel-scroll"><p>操作後自動保存在這個瀏覽器。清除瀏覽器資料會移除進度，請定期匯出備份。</p>${saveProblem ? `<p class="save-warning">${escape(saveProblem)}</p>` : ''}<div class="actions"><button data-tool="export" class="primary">匯出 JSON 備份</button><button data-tool="import">匯入備份</button><button data-tool="raw">匯出原始存檔</button><button data-tool="new" class="danger">重新開始</button></div><p class="help">匯入與重新開始會取代目前進度，確認前可取消。</p><details class="rules"><summary>查看工坊規則</summary><h3>時間與款項</h3><p>開店前進一個月，收取交貨與鳥信，支付生活費 8 枚。關店不換月；兩種狀態都能製作。採購與贈還只能向當前櫃臺人物辦理；辦完送客才換下一位。款項不足先記欠款，銷售所得優先還款。</p><h3>製作</h3><p>開始製作扣材料，基本作品 1 個月、複雜作品 2 個月；只在開店換月推進，必定完成。沒有工時額度或製作容量限制。${W.knownMaterials(state).join('、')}是目前辨識的材料；新材料經探索逐步發現。物品售價只按品質區分：樸實 14、細緻 20、精良 26 枚。</p><h3>裝備與傳承</h3><p>鑑定後顯示效能與耐久。輕巧提升效能；堅固減少磨耗；護身改善防護使用結果。NPC 實際使用才磨耗，磨損後當面贈還；每件可免費練習修復一次，或熔鍊把特性傳給同材質新作，最多兩個。</p><h3>保存</h3><p>固定使用同一網址與瀏覽器。匯入會先驗證備份；壞檔不覆蓋目前進度。</p></details></div>`;
   }
   function currentGuidance() {
     const t = W.tutorialStep(state), v = W.activeVisit(state);
     if (t.step >= 5 && W.knownMaterials(state).length === 2) return { title: '探索新材料線索', text: '向在場人物委託探索，下月辨識後再談新裝備。', full: '未知材料不能先採購或製作；探索與採購、客人製作委託共用每人一件限制。' };
     if (t.step < 5) return { title: t.title, text: compactGoal(t), full: t.text };
-    if (v && v.phase === 'request' && v.npc === 'he' && !v.asked && !state.visits.some(x => x.npc === 'he' && x.status === 'done')) return { title: '小禾帶來新需求', text: '問清用途，再做一件合用的裝備。', full: '先聽小禾的需求。你會從這次對話學到新的配方。' };
+    if (v && v.phase === 'request' && v.npc === 'he' && !v.asked && !state.visits.some(x => x.npc === 'he' && x.status === 'done')) return { title: '小禾帶來新需求', text: '問清用途，開始合用作品或接受製作委託；完工再交易。', full: '先聽小禾的需求。你會從這次對話學到新的配方。' };
     if (W.canAppraise(state) && !state.xp.appraisal && v?.npc === 'he' && W.inventory(state).some(i => W.suitable(state, i, v))) return { title: '小禾想了解品質', text: '到作品架鑑定這件物品，再向她推薦。', full: '鑑定不耗材料或月份。你可以看出物品的品質，每件鑑定一次。' };
     if (state.returns.some(o => o.status === 'offered') && !state.returns.some(o => o.status === 'accepted')) return { title: '鳥信裡有舊物要歸還', text: '讀贈還信；等本人到櫃臺時當面領回。', full: '原持有者因磨損退役舊物，願意當面贈還。只有本人在櫃臺時才可收下，物品才回到工坊。' };
     if (!state.legacies.length && W.inventory(state).some(i => i.returned)) return { title: '舊物回到工坊', text: '先修復再售，或熔鍊回收材料與特性。', full: '再售會轉給新持有者；熔鍊會消耗原物，得到原材料與一次同材質傳承。' };
@@ -190,7 +190,7 @@
     if (b.dataset.tool === 'export') { download(W.exportSave(state), `鳥信工坊-第${state.month}月.json`); notify('已匯出備份。請在瀏覽器下載紀錄確認檔案。'); }
     if (b.dataset.tool === 'raw') { try { download(localStorage.getItem(KEY) || W.exportSave(state), '鳥信工坊-原始存檔.json'); } catch (e) { notify('無法讀取原始存檔，請匯出目前進度。', true); } }
     if (b.dataset.tool === 'import') $('import-file').click();
-    if (b.dataset.tool === 'new' && await confirm('重新開始這間工坊？', '目前進度會被替換。若想保留，請先取消並匯出 JSON 備份。', '重新開始')) { state = W.initialState(); saveProblem = ''; tab = 'craft'; save(); render(); notify('新的一間工坊準備好了。先做木杖與鐵劍。'); }
+    if (b.dataset.tool === 'new' && await confirm('重新開始這間工坊？', '目前進度會被替換。若想保留，請先取消並匯出 JSON 備份。', '重新開始')) { state = W.initialState(); saveProblem = ''; tab = 'craft'; save(); render(); notify('新的一間工坊準備好了。先開始木杖與鐵劍，下次開店完工。'); }
   });
   document.addEventListener('change', event => {
     if (event.target.id === 'recommend-item') {

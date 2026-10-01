@@ -75,13 +75,13 @@ async function main() {
   await evaluate('localStorage.clear(); location.reload()'); await ready();
 
   assert.equal(await evaluate('document.documentElement.lang'), 'zh-Hant');
-  assert(await evaluate('document.getElementById("version").textContent.includes("v0.7")'));
+  assert(await evaluate('document.getElementById("version").textContent.includes("v0.8")'));
   assert.equal((await snapshot()).materials.木頭,3);
   assert(await evaluate('!!document.querySelector(".door-only #door") && !document.querySelector(".visitor")'));
   assert(!await evaluate('document.body.innerText.includes("銅")'));
   await desktopChecks('opening',['[data-action*=staff]','[data-action*=sword]','[data-action*=open]']);
   await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-  assert(await evaluate('document.documentElement.scrollWidth <= innerWidth'));await screenshot('mobile-v07-opening.png');
+  assert(await evaluate('document.documentElement.scrollWidth <= innerWidth'));await screenshot('mobile-v08-opening.png');
   await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
   await clickAction('craft',{recipe:'staff'});await clickAction('craft',{recipe:'sword'});
   assert.equal(W.inventory(await snapshot()).length,0);assert.equal((await snapshot()).month,0);
@@ -93,7 +93,7 @@ async function main() {
   await clickAction('leave');await clickAction('close');assert(await evaluate('!!document.querySelector(".door-only #door") && !document.querySelector(".visitor")'));
   await clickAction('open');assert.equal((await snapshot()).materials.銅,2);await clickAction('talk');
   await clickAction('accept-commission',{},true);assert.equal((await snapshot()).commissions[0].status,'crafting');
-  await clickTab('craft');await screenshot('production-v07.png');await clickAction('close');await clickAction('open');
+  await clickTab('craft');await screenshot('production-v08.png');await clickAction('close');await clickAction('open');
   const seek=async npc=>{while(W.activeVisit(await snapshot())?.npc!==npc){const v=W.activeVisit(await snapshot());assert(v);await clickAction(v.phase==='service'?'leave':'decline');}};
   await seek('he');assert.equal(W.activeVisit(await snapshot()).kind,'delivery');
   await desktopChecks('delivery',['.counter [data-action*=deliver]','[data-action*=close]']);
@@ -122,7 +122,7 @@ async function main() {
   await seek('cen');await clickAction('reclaim',{itemId:'item-1'});await clickTab('inventory');await clickAction('smelt',{itemId:'item-1'});
   assert(await evaluate('document.getElementById("confirm-dialog").open'));await evaluate('document.getElementById("confirm-yes").click()');await delay(50);
   await clickTab('collection');assert(await evaluate('document.getElementById("panel").innerText.includes("實物已消耗")'));
-  await screenshot('collection-v07.png');await desktopChecks('collection',['[data-tab=craft]','[data-tab=collection]']);
+  await screenshot('collection-v08.png');await desktopChecks('collection',['[data-tab=craft]','[data-tab=collection]']);
   const saved=await snapshot();await cdp('Page.reload');await ready();assert.deepEqual(await snapshot(),saved);
   assert.equal(exceptions.length,0);pass('實際使用才磨耗、本人贈還與熔鍊收藏、無未處理例外');
   const result = { status: 'passed', checks: reports, exceptions, month: (await snapshot()).month, browser: chrome, gameUrl, isolatedProfile: true, screenshots: fs.readdirSync(qa).filter(n => n.endsWith('.png')), finishedAt: new Date().toISOString() };

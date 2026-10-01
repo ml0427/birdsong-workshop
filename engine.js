@@ -162,9 +162,10 @@
       const proof = eventDone(s, key);
       if (proof?.npc === npc) need(follow.recipe, follow.text, key);
     }
-    // Longer production must not let repeated replacements starve a new use.
+    // Prefer new uses, then the least recently supplied use, so replacements stay fair.
     const newUse = d => CONTENT.EVENTS.some(def => def.npc === npc && def.recipe === d.needs[0] && def.requires === d.contentKey && !eventDone(s, def.id));
-    candidates.sort((a, b) => Number(newUse(b)) - Number(newUse(a)));
+    const lastSupplied = d => Object.values(s.items).filter(i => i.recipe === d.needs[0]).flatMap(i => i.episodes.filter(e => e.npc === npc).map(e => e.since)).reduce((latest, month) => Math.max(latest, month), 0);
+    candidates.sort((a, b) => Number(newUse(b)) - Number(newUse(a)) || lastSupplied(a) - lastSupplied(b));
     let d = candidates.find(d => !s.content.declined[npc][d.needs[0]] || s.month - s.content.declined[npc][d.needs[0]] >= 2);
     if (!d) return null;
     const recipe = d.needs[0];
@@ -263,7 +264,7 @@
     }
     if (!s.tutorial.ordered) return { title: '交代第一份材料委託', text: '阿岑還在櫃臺。先託他探索新材料，也可以採購已知的木頭／鐵；下次開店交付。', step: 3 };
     if (!s.tutorial.delivered) return { title: s.open ? '等下次開店到貨' : '開店收取材料', text: s.open ? '先關店，再開店收取材料與鳥信。關店不推進月份。' : '按開店即可，材料與鳥信會一起送到。', step: 4 };
-    return { title: '小禾帶來新需求', text: '先聽用途，再做一件合用的裝備。', step: 5 };
+    return { title: '小禾帶來新需求', text: '先聽用途，開始製作或接客人委託；完工後再推薦或交付。', step: 5 };
   }
   function orderQuote(s, material, quantity) {
     if (!s.knownMaterials.includes(material) || !integer(quantity, 1)) fail('採購數量請填正安全整數，且只能選已辨識材料；新材料先委託探索。');
