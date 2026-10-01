@@ -141,7 +141,7 @@
     return owned(s, 'he').find(i => i.recipe === recipe && performance(i) >= (recipe === 'bracer' ? 8 : 4)
       && i.traits.includes(recipe === 'bracer' ? 'guard' : 'solid') && i.durability >= 4
       && !s.returns.some(o => o.itemId === i.id && o.status === 'offered')
-      && (!justUsed || episode(i).since < s.month && episode(i).lastUsedMonth === s.month)) || null;
+      && (justUsed ? episode(i).since < s.month && episode(i).lastUsedMonth === s.month : i.durability - useResult(i).wear >= 4)) || null;
   }
   function journeyHint(s) {
     const p = journeyProgress(s);
@@ -166,6 +166,16 @@
     if (npc !== 'he' || p.stage < 2 || p.stage >= 4 || !eventDone(s, 'he-shield')) return null;
     const recipe = !journeyGear(s, 'bracer') ? 'bracer' : p.stage >= 3 && !journeyGear(s, 'shield') ? 'shield' : null;
     return recipe && unlocked(s, recipe) ? { needs: [recipe], reason: journeyHint(s), minQuality: 1, traitRequired: RECIPES[recipe].trait, contentKey: null } : null;
+  }
+  function refreshJourneyRequest(s) {
+    const required = journeyDemand(s, 'he');
+    if (!required) return;
+    const visit = s.visits.find(v => v.npc === 'he' && v.status === 'waiting' && v.phase === 'request'
+      && ['normal', 'return'].includes(v.kind) && v.needs.includes(required.needs[0]));
+    if (!visit) return;
+    visit.minQuality = Math.max(visit.minQuality, required.minQuality);
+    visit.traitRequired ||= required.traitRequired;
+    visit.reason = required.reason;
   }
   function journeySnapshot(i) {
     const wear = useResult({ ...i, durability: 9 }).wear;
@@ -307,6 +317,7 @@
       }
     }
     advanceJourney(s);
+    refreshJourneyRequest(s);
     for (const [npc, relation] of Object.entries(s.npcs)) {
       if (relation.story || relation.trust < 3) continue;
       const source = Object.values(s.items).find(i => i.episodes.some(e => e.npc === npc && e.firstUsedMonth !== null && e.firstUsedMonth < s.month));
