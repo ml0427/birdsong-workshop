@@ -1,6 +1,6 @@
 # 專案筆記
 
-v0.18，schema 5。SPEC.md 是單一現行規則。純 HTML/CSS/JS + Node，無依賴。正式資料夾 D:\AI_workspace\birdsong-workshop。2026-10-02 使用者明確要求「以後都自動推送」：完成修改並通過相關測試後，自動提交、同步 D 槽並推送 origin/main，不再逐次詢問、不強制推送。仍不啟動本機服務／瀏覽器；覆蓋 AGENTS.md 啟動舊例。
+v0.19，schema 5。SPEC.md 是單一現行規則。純 HTML/CSS/JS + Node，無依賴。正式資料夾 D:\AI_workspace\birdsong-workshop。2026-10-02 使用者明確要求「以後都自動推送」：完成修改並通過相關測試後，自動提交、同步 D 槽並推送 origin/main，不再逐次詢問、不強制推送。仍不啟動本機服務／瀏覽器；覆蓋 AGENTS.md 啟動舊例。
 
 保留 v0.8 月份製作、NPC 單一背景任務、指定成品／當面交貨、材料知識順序、實際使用／贈還／熔鍊及原九內容節點。普通品質售價 14／20／26；金鈴一次加價規則不變。原 demand 公平性與未知內容遮蔽繼續驗證。
 
@@ -84,3 +84,12 @@ UI新增自由／固定切換，保留v0.17主布局、5數量3欄兩排、開�
 最近4件對照品質、效能／判定、耐久／磨耗、trait names，判定與磨耗是正式useResult實算，沒有NPC或實際戰鬥／磨耗。變更僅UI與測試模型，不把trial maxDurability>9的物件塞進正式state；normal month由正式dispatch成功後帶入，依正式1／2月。每情境、fixed/trial切換保留記憶，重置forge清空，其他場景／正式storage完全隔離。
 
 241項全通過：229原＋12試作，242個合法非零組合逐一開工完成涵蓋六類。驗材料因果／同比例縮放、上下界與不改狀態／不抽RNG、quality/durability有界、隨機差異／每件固定／有效traits、三態簿及精確復用、真lab.js未完工DOM/aria/提示不洩名、兩月等待／close不完工、guard說明不列未知物、近期數值對照、重繪／切頁／不同情境不重抽／存檔隔離、連點防護、reset。VM/CSS不是實際1180×760復驗；交來源本人實玩。沒有啟動本機服務或瀏覽器。
+
+
+2026-10-02 v0.19：來源親玩v0.18，確認零投入、同木1不同trait、木2耐久10對木1耐久9、木鐵平分盾、銀1兩月、三態簿與重用、21超界。只修配料簿change/render收起及空排程佔半屏兩問題，不改lab-trial.js、engine.js、content.js、lab-core.js或種子。
+
+render前從原生details.open擷取bookOpen，再產生open屬性／重繪後回填，保留使用者手動開關。選項change焦點回trial-book、reuse焦點回trial-reuse，套用／開工／月份／切固定或其他場景都保留；reset forge用render(false)清收合，避免舊DOM覆寫reset。配料選項與套用鈕同排，避免展開後按鈕又落到內捲動下方。UI-harness只補focus追蹤以驗實際程式的focus呼叫，不把它當成真OS焦點驗收。
+
+trial-board空排程auto短行、對照占剩餘1fr；有排程限定140px內捲，列以18px名字＋16px配料／時間同行。表格成品・品質及耐久／磨耗同行，垂直padding6，閱讀16px不縮；常見短配料四行更容易同屏，長混合與窄屏仍可內捲。磨耗仍W.useResult，舊UI斷言從分行『磨耗2』改驗同欄9／9·2數值，不刪效果驗證。
+
+243項全過：241原＋2實測修正回歸。兩新測試修正前均失敗；驗展開／選項／套用焦點／兩月仍未完成／trait不重抽／模式切換／手動收合／reset、空/有隊列布局及4筆完整表格、字級與scroll結構。source已有v0.18真實玩法證據；本批未啟動服務／瀏覽器，1180×760四件同屏仍交來源覆驗。
