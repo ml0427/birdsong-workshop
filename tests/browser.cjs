@@ -76,7 +76,7 @@ async function main() {
   await evaluate('localStorage.clear(); location.reload()'); await ready();
 
   assert.equal(await evaluate('document.documentElement.lang'), 'zh-Hant');
-  assert(await evaluate('document.getElementById("version").textContent.includes("v0.11")'));
+  assert(await evaluate('document.getElementById("version").textContent.includes("v0.12")'));
   assert.equal((await snapshot()).materials.木頭,3);
   assert(await evaluate('!!document.querySelector(".door-only #door") && !document.querySelector(".visitor")'));
   assert(!await evaluate('document.body.innerText.includes("銅")'));

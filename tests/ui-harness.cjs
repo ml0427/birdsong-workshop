@@ -18,7 +18,7 @@ function view(options={}){
  const document={getElementById:element,querySelector(){return null;},addEventListener(name,cb){documentListeners.set(name,cb);},body:{appendChild(){}},createElement(tag){assert.equal(tag,'a');return {href:'',download:'',click(){downloads.push({name:this.download,blob:blobs.get(this.href)});},remove(){}};}};
  const localStorage={getItem(k){if(options.failGet)throw new Error('storage denied');return storage.get(k)||null;},setItem(k,v){if(options.failSet)throw new Error('storage full');storage.set(k,v);}};
  const window={Workshop:W,addEventListener(name,cb){windowListeners.set(name,cb);}};
- const context=vm.createContext({window,document,localStorage,Blob,URL:url,setTimeout:fn=>{fn();return 0;}});
+ const context=vm.createContext({window,document,localStorage,Blob,URL:url,performance:{now:options.now||(()=>Date.now())},setTimeout:fn=>{fn();return 0;}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),context);
  const html=()=>element('app').innerHTML;
  const buttons=()=>[...html().matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].map(m=>{const attr=m[1],data={};for(const a of attr.matchAll(/data-([a-z]+)="([^"]*)"/g))data[a[1]]=decode(a[2]);return {dataset:data,disabled:/\bdisabled\b/.test(attr),label:decode(m[2]),action:data.action?JSON.parse(data.action):null};});
@@ -28,7 +28,7 @@ function view(options={}){
  const click=async b=>{assert(b,'missing button');await documentListeners.get('click')({target:{closest:()=>b}});if(options.autoReview!==false&&JSON.parse(b.dataset.action||'{}').type==='open')await reviewAll();};
  return {element,storage,downloads,options,html,buttons,raw:()=>storage.get(KEY),state:()=>W.importSave(storage.get(KEY)),notice:()=>element('notice').textContent,
   reviewAll,button(type,props={}){const b=buttons().find(b=>b.action?.type===type&&Object.entries(props).every(([k,v])=>b.action[k]===v));assert(b,'missing '+type);return b;},
-  click,clickAction(type,props={}){return click(this.button(type,props));},clickTab(tab){return click(buttons().find(b=>b.dataset.tab===tab));},clickTool(tool){return click(buttons().find(b=>b.dataset.tool===tool));},
+  click,async clickEvent(b,props={}){assert(b,'missing button');let prevented=false;await documentListeners.get('click')({target:{closest:()=>b},preventDefault(){prevented=true;},stopPropagation(){},...props});return prevented;},clickAction(type,props={}){return click(this.button(type,props));},clickTab(tab){return click(buttons().find(b=>b.dataset.tab===tab));},clickTool(tool){return click(buttons().find(b=>b.dataset.tool===tool));},
   async idle(){for(let n=0;n<8;n++)await Promise.resolve();},answer(yes){const d=element('confirm-dialog');assert(d.open,'confirmation not open');return d.close(yes?'yes':'cancel');},
   importFile(file){return element('import-file').fire('change',{target:{files:[file],value:'file.json'}});},
   importRaw(raw){return this.importFile({size:Buffer.byteLength(raw,'utf8'),async text(){return raw;}});},

@@ -5,6 +5,7 @@
   const pages = { inventory: 1, mail: 1, collection: 1 };
   const recommendations = {};
   let renderedTab = null, resetPanelScroll = false, mailMonth = null;
+  let reviewPointerGuard = false, reviewPointerUntil = 0;
   const escape = x => String(x).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $ = id => document.getElementById(id);
   try {
@@ -211,7 +212,22 @@
   }
   document.addEventListener('click', async event => {
     const b = event.target.closest('button'); if (!b || b.disabled) return;
-    if (b.dataset.action) { b.disabled = true; await act(JSON.parse(b.dataset.action)); return; }
+    const pointerClick = event.detail > 0 || ['touch', 'pen'].includes(event.pointerType);
+    if (pointerClick && reviewPointerGuard) {
+      // The next click can target a newly rendered button with a fresh revision
+      // and even reset detail to 1. Wait for this pointer burst to end as well.
+      const now = performance.now();
+      if (now < reviewPointerUntil || event.detail > 1) {
+        reviewPointerUntil = now + 600;
+        event.preventDefault(); event.stopPropagation(); return;
+      }
+      reviewPointerGuard = false;
+    }
+    if (b.dataset.action) {
+      const action = JSON.parse(b.dataset.action);
+      if (['open', 'review-next'].includes(action.type) && pointerClick) { reviewPointerGuard = true; reviewPointerUntil = performance.now() + 600; }
+      b.disabled = true; await act(action); return;
+    }
     if (b.dataset.tab) { tab = b.dataset.tab; resetPanelScroll = true; render(); document.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true }); return; }
     if (b.dataset.page && Object.hasOwn(pages, b.dataset.page)) { pages[b.dataset.page] = Number(b.dataset.number); resetPanelScroll = true; render(); document.querySelector('.pagination button:not(:disabled)')?.focus({ preventScroll: true }); return; }
     if (b.dataset.tool === 'guide') { const g = currentGuidance(); if (g) showInfo(g.title, `<p>${escape(g.full)}</p>`); }
