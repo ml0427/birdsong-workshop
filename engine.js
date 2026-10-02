@@ -7,9 +7,9 @@
   const MATERIALS = ['木頭', '鐵', '銅', '銀', '金'];
   const COST = { 木頭: 3, 鐵: 6, 銅: 10, 銀: 16, 金: 24 };
   const TRAITS = {
-    light: { name: '輕巧', text: '效能增加 1，便於施法與佩戴。' },
-    solid: { name: '堅固', text: '每次使用的耐久磨耗減少 1。' },
-    guard: { name: '護身', text: '防護使用的結果加值 2。' }
+    light: { name: '輕巧', powerBonus: 1 },
+    solid: { name: '堅固', wearReduction: 1 },
+    guard: { name: '護身', useBonus: 2, appliesTo: ['sword', 'shield', 'bracer', 'amulet'] }
   };
   const RECIPES = {
     staff: { name: '木杖', material: '木頭', tier: 1, kind: 'staff', use: '引導魔力與照路', symbol: '杖', trait: 'light' },
@@ -19,6 +19,9 @@
     amulet: { name: '銀護符', material: '銀', tier: 4, kind: 'amulet', use: '佩戴護身與抵禦魔法干擾', symbol: '符', trait: 'guard' },
     bell: { name: '金鈴', material: '金', tier: 5, kind: 'bell', use: '佩戴後感應接近的危險', symbol: '鈴', trait: 'light' }
   };
+  TRAITS.light.text = `效能＋${TRAITS.light.powerBonus}（所有用途）`;
+  TRAITS.solid.text = `每次使用磨耗－${TRAITS.solid.wearReduction}，最低1點（不超過剩餘耐久）`;
+  TRAITS.guard.text = `限${TRAITS.guard.appliesTo.map(id => RECIPES[id].name.replace(/^(銅|銀)/, '')).join('／')}使用判定＋${TRAITS.guard.useBonus}，面板效能不變`;
   const PEOPLE = { cen: { name: '阿岑', role: '熟客' }, he: { name: '小禾', role: '重視個人防護的熟客' }, shu: { name: '望舒', role: '魔法裝備使用者' } };
   const QUALITY = ['樸實', '細緻', '精良'], QUALITY_PRICE = [14, 20, 26];
   const CRAFT_MONTHS = { staff: 1, sword: 1, shield: 1, bracer: 1, amulet: 2, bell: 2 }, EXPLORATION_COST = 6;
@@ -62,11 +65,12 @@
     for (const v of s.visits) if (v.asked) for (const r of v.needs) learned.add(r);
     return Object.keys(RECIPES).filter(id => learned.has(id) && unlocked(s, id));
   }
-  const performance = i => RECIPES[i.recipe].tier * 2 + i.quality * 2 + (i.traits.includes('light') ? 1 : 0);
+  const performance = i => RECIPES[i.recipe].tier * 2 + i.quality * 2 + i.traits.reduce((n, t) => n + (TRAITS[t].powerBonus || 0), 0);
   const traitNames = i => i.traits.map(t => TRAITS[t].name).join('、');
+  const traitDetails = value => (Array.isArray(value) ? value : value.traits).map(t => `${TRAITS[t].name}（${TRAITS[t].text}）`).join('；');
   const episode = i => i.episodes.at(-1) || null;
   function useResult(i) {
-    const score = performance(i) + (['sword', 'shield', 'bracer', 'amulet'].includes(i.recipe) && i.traits.includes('guard') ? 2 : 0);
+    const score = performance(i) + i.traits.reduce((n, t) => n + (TRAITS[t].appliesTo?.includes(i.recipe) ? TRAITS[t].useBonus : 0), 0);
     const strong = score >= RECIPES[i.recipe].tier * 2 + 2;
     const texts = {
       staff: ['照路魔光明亮而穩定', '魔光較淡，仍足以看清腳下'],
@@ -77,10 +81,10 @@
       bell: ['提前感應異常，鈴聲讓持有者及時避開', '靠近異常時才響起，持有者停步繞行']
     };
     const extra = score >= RECIPES[i.recipe].tier * 2 + 5;
-    return { score, strong, wear: Math.min(i.durability, Math.max(1, (strong ? 2 : 3) - (i.traits.includes('solid') ? 1 : 0))), text: texts[i.recipe][strong ? 0 : 1] + (extra ? '，效能餘裕充足，操作更加從容' : '') };
+    return { score, strong, wear: Math.min(i.durability, Math.max(1, (strong ? 2 : 3) - i.traits.reduce((n, t) => n + (TRAITS[t].wearReduction || 0), 0))), text: texts[i.recipe][strong ? 0 : 1] + (extra ? '，效能餘裕充足，操作更加從容' : '') };
   }
   function requestDetail(v) {
-    if (v.phase === 'service') return v.kind === 'intro' ? '兩件武器都收好了。採購清單交給我，辦完再離開。' : v.contextText || '這次需求已辦妥。我還在櫃臺，可以交代採購或領回我贈還的舊物。';
+    if (v.phase === 'service') return v.kind === 'intro' ? '兩件武器都收好了。需要材料時再交代清單，也可以先離開。' : v.contextText || '這次需求已辦妥。我還在櫃臺，可以交代採購或領回我贈還的舊物。';
     if (v.kind === 'intro') return '木杖照路，鐵劍防身。兩件都由我自己使用。';
     const details = { staff: '我要用木杖引導魔力，照亮走路的方向。', sword: '外出時需要鐵劍防身，格擋時握持要穩。', shield: '想用木盾保護自己，擋住飛石與衝擊。', bracer: '想用銅護腕保護手臂，也讓魔力更穩定。請幫我看看接縫與品質。', amulet: '想佩戴銀護符，抵禦路上的魔法干擾。', bell: '想佩戴金鈴，接近危險時能先得到警示。' };
     return `${details[v.needs[0]] || '我帶了退役舊物來贈還。'}${v.reason ? ` ${v.reason}` : ''}${v.traitRequired ? ` 希望有「${TRAITS[v.traitRequired].name}」特性。` : ''}`;
@@ -330,7 +334,13 @@
       relation.story = true; relation.storyItem = source.id;
       news(s, `story-v2-${npc}`, `${PEOPLE[npc].name}分享經歷：「之前確實用過你做的${RECIPES[source.recipe].name}。${source.traits.includes('guard') ? '那份護身效果' : source.traits.includes('solid') ? '它經得起磨耗' : '它便於攜帶'}讓我更安心。我願意繼續把裝備交給你照料。」`, source.id);
     }
-    if (!openingDone(s) || !s.tutorial.ordered) addVisit(s, 'cen', ['staff', 'sword'].filter(k => !s.tutorial.sold.includes(k)), 'intro', {}, 'intro-cen');
+    if (!openingDone(s) || !s.tutorial.ordered) {
+      const needs = ['staff', 'sword'].filter(k => !s.tutorial.sold.includes(k));
+      const intro = s.visits.find(v => v.id === 'intro-cen');
+      if (intro && intro.status !== 'waiting' && !s.visits.some(v => v.npc === 'cen' && v.status === 'waiting'))
+        Object.assign(intro, { month: s.month, status: 'waiting', asked: false, needs, phase: needs.length ? 'request' : 'service' });
+      addVisit(s, 'cen', needs, 'intro', {}, 'intro-cen');
+    }
     else if (s.tutorial.delivered) {
       for (const npc of ['he', 'cen', 'shu']) {
         const commission = s.commissions.find(c => c.npc === npc && !['delivered', 'cancelled'].includes(c.status));
@@ -365,7 +375,7 @@
       const waiting = Object.values(s.items).some(i => ['staff', 'sword'].includes(i.recipe) && i.status === 'crafting');
       return { title: waiting ? '開店推進一月，完成武器' : s.open ? '把作品推薦給阿岑' : '開店迎接阿岑', text: waiting ? '準備月開始的兩件，下次開店就完成。營業中開始則先關店再開店；沒有現實等待。' : '兩件都由阿岑自己使用。逐件推薦即可。', step: 2 };
     }
-    if (!s.tutorial.ordered) return { title: '交代第一份材料委託', text: '阿岑還在櫃臺。先託他探索新材料，也可以採購已知的木頭／鐵；下次開店交付。', step: 3 };
+    if (!s.tutorial.ordered) return { title: '材料委託可以稍後', text: activeVisit(s)?.npc === 'cen' ? '可託阿岑探索或採購，也可以直接送客。材料教學能在之後來訪補學。' : '阿岑下次來訪仍可交代材料委託。現在可繼續製作，或關店後再開店。', step: 3 };
     if (!s.tutorial.delivered) return { title: s.open ? '等下次開店到貨' : '開店收取材料', text: s.open ? '先關店，再開店收取材料與鳥信。關店不推進月份。' : '按開店即可，材料與鳥信會一起送到。', step: 4 };
     return { title: '小禾帶來新需求', text: '先聽用途，開始製作或接客人委託；完工後再推薦或交付。', step: 5 };
   }
@@ -375,12 +385,17 @@
     const reserved = reservedMaterial(s, material);
     add(reserved, quantity); return cost;
   }
+  function productionTraits(s, recipe) {
+    const r = RECIPES[recipe], legacy = s.legacies.find(l => l.material === r.material && l.usedBy === null);
+    const traits = [r.trait];
+    if (legacy) { for (const t of legacy.traits) if (!traits.includes(t) && traits.length < 2) traits.push(t); if (traits.length < 2) traits.push(r.trait === 'solid' ? 'guard' : 'solid'); }
+    return traits;
+  }
   function startProduction(s, recipe, commission = null) {
         const r = RECIPES[recipe]; if (!r || !unlocked(s, recipe)) fail('這份配方尚未學會。');
         if (s.materials[r.material] < 1) fail(`需要 ${r.material} 1 個。可開店委託目前顧客採購。`);
         const legacy = s.legacies.find(l => l.material === r.material && l.usedBy === null), id = `item-${s.seq = add(s.seq, 1)}`;
-        const quality = Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)), traits = [r.trait];
-        if (legacy) { for (const t of legacy.traits) if (!traits.includes(t) && traits.length < 2) traits.push(t); if (traits.length < 2) traits.push(r.trait === 'solid' ? 'guard' : 'solid'); }
+        const quality = Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)), traits = productionTraits(s, recipe);
         if (commission && (quality < commission.minQuality || commission.traitRequired && !traits.includes(commission.traitRequired))) fail('目前製作條件未達客人要求，先練習或取得合適傳承，再開始這件委託。');
         s.materials[r.material]--;
         const i = s.items[id] = { id, recipe: recipe, material: r.material, quality, traits, durability: 9, maxDurability: 9, repaired: false, status: 'crafting', owner: null, createdMonth: s.month, soldMonth: null, appraised: false, usedEvent: false, retirementOffered: false, returned: false, legacy: legacy ? legacy.itemId : null, episodes: [], dueMonth: s.month + CRAFT_MONTHS[recipe], finishedMonth: null, reservedFor: commission ? commission.id : null, history: [] };
@@ -391,8 +406,7 @@
   }
   function canStartCommission(s, c) {
     const r = RECIPES[c.recipe], legacy = s.legacies.find(l => l.material === r.material && l.usedBy === null);
-    const traits = [r.trait];
-    if (legacy) { for (const t of legacy.traits) if (!traits.includes(t) && traits.length < 2) traits.push(t); if (traits.length < 2) traits.push(r.trait === 'solid' ? 'guard' : 'solid'); }
+    const traits = productionTraits(s, c.recipe);
     return s.materials[r.material] > 0 && Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)) >= c.minQuality && (!c.traitRequired || traits.includes(c.traitRequired));
   }
   function duplicateRequest(s, id) { return [...s.orders, ...s.explorations, ...s.commissions, ...s.journey.outings].some(t => t.requestId === id); }
@@ -428,7 +442,7 @@
         s.month = add(s.month, 1); s.open = true; settle(s); message = log(s, '開店。生活費、交貨與鳥信已一起更新。'); break;
       case 'close':
         if (!s.open) fail('工坊已經關店，月份沒有改變。');
-        for (const v of s.visits.filter(v => v.status === 'waiting' && v.phase === 'service')) if (v.kind !== 'intro' || s.tutorial.ordered) v.status = 'done';
+        for (const v of s.visits.filter(v => v.status === 'waiting' && v.phase === 'service')) { v.status = 'done'; v.counterId = null; }
         for (const v of s.visits.filter(v => v.status === 'waiting')) v.counterId = null;
         s.open = false; message = log(s, '關店。未完成的需求留到下次；可以繼續製作。'); break;
       case 'craft': {
@@ -462,7 +476,6 @@
       }
       case 'decline': case 'leave': {
         const v = scope(s, a);
-        if (v.kind === 'intro' && (!openingDone(s) || !s.tutorial.ordered)) fail('阿岑會等兩件開場作品與第一張採購清單；可先關店準備。');
         if (a.type === 'leave' && v.phase !== 'service') fail('請先處理或婉拒這次需求。');
         if (v.phase === 'request') for (const r of v.needs) s.content.declined[v.npc][r] = s.month;
         v.status = v.phase === 'service' ? 'done' : 'declined'; v.counterId = null; message = log(s, `${PEOPLE[v.npc].name}離開櫃臺。下一位顧客才能進來。`); break;
@@ -840,5 +853,5 @@
     if (d.schema === 4) return migrateV4(d.state);
     validate(d.state); return clone(d.state);
   }
-  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, canScout, journeyProgress, journeyHint, roadState, explorationQuantity, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, useResult, orderQuote, dispatch, pendingReview, validate, exportSave, importSave };
+  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, canScout, journeyProgress, journeyHint, roadState, explorationQuantity, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, traitDetails, productionTraits, useResult, orderQuote, dispatch, pendingReview, validate, exportSave, importSave };
 });
