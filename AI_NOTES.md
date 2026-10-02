@@ -1,6 +1,6 @@
 # 專案筆記
 
-v0.10，schema 5。SPEC.md 是單一現行規則。純 HTML/CSS/JS + Node，無依賴。正式資料夾 D:\AI_workspace\birdsong-workshop。最新指示只本機提交與同步，不推送，不啟動本機服務／瀏覽器；覆蓋 AGENTS.md 啟動舊例。
+v0.10，schema 5。SPEC.md 是單一現行規則。純 HTML/CSS/JS + Node，無依賴。正式資料夾 D:\AI_workspace\birdsong-workshop。2026-10-02 使用者明確要求「以後都自動推送」：完成修改並通過相關測試後，自動提交、同步 D 槽並推送 origin/main，不再逐次詢問、不強制推送。仍不啟動本機服務／瀏覽器；覆蓋 AGENTS.md 啟動舊例。
 
 保留 v0.8 月份製作、NPC 單一背景任務、指定成品／當面交貨、材料知識順序、實際使用／贈還／熔鍊及原九內容節點。普通品質售價 14／20／26；金鈴一次加價規則不變。原 demand 公平性與未知內容遮蔽繼續驗證。
 

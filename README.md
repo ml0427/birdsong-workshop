@@ -6,7 +6,7 @@
 
 [線上遊玩](https://ml0427.github.io/birdsong-workshop/) · [原始碼](https://github.com/ml0427/birdsong-workshop)
 
-本機已完成 v0.10。本批只做本機實作，沒有推送；上方線上入口仍為 v0.6，不能拿來驗證 v0.10。v0.7 的公開推送曾被自動審核拒絕，紀錄見 TEST_RESULTS.md。
+本機已完成 v0.10。2026-10-02 起依使用者要求，完成並通過測試後自動推送原始碼；線上遊戲版本以入口頁尾為準，GitHub Pages 更新可能晚於推送。v0.7 的公開推送曾被自動審核拒絕，歷史紀錄見 TEST_RESULTS.md。
 
 本機專案：`D:\AI_workspace\birdsong-workshop`。雙擊 `START.cmd`，或執行：
 
