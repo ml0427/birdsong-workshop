@@ -19,3 +19,5 @@
 .trial-book-actions{display:flex;align-items:center;gap:8px}.trial-book-actions select{flex:1;min-width:0;width:0}.trial-book-actions button{flex-shrink:0;margin:0;white-space:nowrap}
 .lab-weapon-board{grid-template-rows:minmax(0,1fr)}.lab-weapon-board>.lab-section:first-child{grid-row:auto}.weapon-results button{min-height:44px;padding:6px;font-size:16px;white-space:nowrap}.weapon-results th,.weapon-results td{font-size:16px}.weapon-odds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:8px 12px;border:1px solid #ded9cb;border-radius:8px;background:#fffdf8;flex-shrink:0}.weapon-odds p{font-size:16px;line-height:1.5;margin:0}.lab-controls>span{font-size:16px}
 @media(max-width:900px){.weapon-odds{grid-template-columns:1fr}.weapon-results{min-width:650px}}
+
+.weapon-results th .trait-name{white-space:normal;text-align:left;max-width:100%;padding:0}
