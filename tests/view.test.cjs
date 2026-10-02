@@ -3,23 +3,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 const W = require('../engine.js');
 
-// Render the actual UI script without launching a browser. These checks cover
-// state-driven text and controls, not CSS geometry or browser interaction.
-function view(state) {
-  const elements = new Map(), listeners = new Map();
-  const element = id => {
-    if (!elements.has(id)) elements.set(id, { innerHTML: '', textContent: '', classList: { toggle() {} }, addEventListener() {}, scrollTo() {}, focus() {} });
-    return elements.get(id);
-  };
-  const storage = new Map([['birdsong-workshop-save-v1', W.exportSave(state)]]);
-  const document = { getElementById: element, querySelector: () => null, addEventListener: (name, cb) => listeners.set(name, cb) };
-  const context = { window: { Workshop: W, addEventListener() {} }, document, localStorage: { getItem: k => storage.get(k) || null, setItem: (k, v) => storage.set(k, v) }, setTimeout, URL, Blob };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), context);
-  return { element, state: () => W.importSave(storage.get('birdsong-workshop-save-v1')), notice: () => element('notice').textContent, html: () => element('app').innerHTML, ledger: () => element('ledger').innerHTML, async click(dataset) { const b = { dataset, disabled: false }; await listeners.get('click')({ target: { closest: () => b } }); } };
-}
+// Legacy UI regressions use the same actual-app harness and read monthly cards
+// as setup. The dedicated monthly UI tests inspect each card without auto-read.
+const {view:actualView}=require('./ui-harness.cjs');
+function view(state){const v=actualView({state});return {...v,ledger:()=>v.element('ledger').innerHTML,click:dataset=>v.click({dataset,disabled:false})};}
 
 
 const { game, craft, intro, order, explore, ready, next, at, returnedStaff } = require('./helpers.cjs');
@@ -59,5 +48,5 @@ test('收藏熔鍊物只顯已消耗，不建議修復再售，保留故事',asy
  const {g,item}=returnedStaff();g.do({type:'smelt',itemId:item.id});const v=view(g.s);await v.click({tab:'collection'});const fragment=v.html().split('<article class="item">').find(x=>x.includes('已熔鍊／拆解'));assert(fragment);assert.match(text(fragment),/實物已消耗.*不能修復或出售/);assert.doesNotMatch(text(fragment),/磨損，修復後才能推薦/);assert.match(fragment,/物品故事/);
 });
 test('語言、載入順序、單一櫃臺開關店與版本一致',()=>{
- const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');assert.match(html,/lang="zh-Hant"/);assert.doesNotMatch(html,/id="door"/);assert(html.indexOf('src="content.js')<html.indexOf('src="engine.js'));assert(html.indexOf('src="engine.js')<html.indexOf('src="app.js'));assert.match(html,/v0.10/);assert.equal((html.match(/\?v=0\.10/g)||[]).length,4);assert.match(fs.readFileSync(path.join(__dirname,'../server.cjs'),'utf8'),/'\/content\.js'.*'text\/javascript'/);
+ const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');assert.match(html,/lang="zh-Hant"/);assert.doesNotMatch(html,/id="door"/);assert(html.indexOf('src="content.js')<html.indexOf('src="engine.js'));assert(html.indexOf('src="engine.js')<html.indexOf('src="app.js'));assert.match(html,/v0.11/);assert.equal((html.match(/\?v=0\.11/g)||[]).length,4);assert.match(fs.readFileSync(path.join(__dirname,'../server.cjs'),'utf8'),/'\/content\.js'.*'text\/javascript'/);
 });

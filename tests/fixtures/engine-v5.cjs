@@ -1,5 +1,5 @@
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./content.js') : root.WorkshopContent);
+  const api = factory(typeof module === 'object' && module.exports ? require('../../content.js') : root.WorkshopContent);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.Workshop = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (CONTENT) {
@@ -29,7 +29,7 @@
   function add(a, b) { const n = a + b; if (!integer(n)) fail('數值超出安全整數範圍，未執行操作。'); return n; }
   function multiply(a, b) { const n = a * b; if (!integer(n)) fail('總價超出安全整數範圍，未執行採購。'); return n; }
   function initialState() {
-    return { schema: 5, revision: 0, month: 0, lastSettled: 0, open: false, coins: 20, debt: 0, seq: 0, monthReview: null,
+    return { schema: 5, revision: 0, month: 0, lastSettled: 0, open: false, coins: 20, debt: 0, seq: 0,
       materials: { 木頭: 3, 鐵: 3, 銅: 0, 銀: 0, 金: 0 }, knownMaterials: ['木頭', '鐵'], explorations: [], commissions: [], legacyTaskIds: [], items: {}, xp: { craft: 0, appraisal: 0 }, reputation: 0,
       npcs: Object.fromEntries(Object.keys(PEOPLE).map(id => [id, { trust: 0, story: false, goldDone: false, storyItem: null }])),
       tutorial: { sold: [], ordered: false, delivered: false }, orders: [], visits: [], news: [], returns: [], legacies: [], content: emptyContent(), journey: emptyJourney(),
@@ -274,11 +274,7 @@
   }
   function settle(s) {
     if (s.lastSettled >= s.month) fail('這個月已結算。');
-    const wallet = { coins: s.coins, debt: s.debt };
-    s.monthReview = { month: s.month, cursor: 0, wallet, entries: [] };
     charge(s, 8);
-    s.monthReview.entries.push({ kind: 'money', source: 'living', amount: 8,
-      cashPaid: wallet.coins - s.coins, debtAdded: s.debt - wallet.debt });
     for (const o of s.orders) {
       if (o.status !== 'pending' || o.due > s.month) continue;
       s.materials[o.material] = add(s.materials[o.material], o.quantity); o.status = 'delivered'; o.deliveredMonth = s.month;
@@ -300,7 +296,6 @@
     for (const i of Object.values(s.items)) {
       if (i.status !== 'crafting' || i.dueMonth > s.month) continue;
       i.status = 'inventory'; i.finishedMonth = s.month; s.xp.craft = add(s.xp.craft, 1);
-      s.monthReview.entries.push({ kind: 'finished', itemId: i.id });
       if (i.reservedFor) s.commissions.find(c => c.id === i.reservedFor).status = 'ready';
       history(s, i, `第 ${s.month} 月完工，${QUALITY[i.quality]}的${RECIPES[i.recipe].name}${i.reservedFor ? `保留給${PEOPLE[s.commissions.find(c => c.id === i.reservedFor).npc].name}` : '放上作品架'}。`);
       news(s, `finished-${i.id}`, `${RECIPES[i.recipe].name}完工${i.reservedFor ? '，等待本人到櫃臺交貨，尚未出售' : '，可在作品架推薦'}。`, i.id);
@@ -396,33 +391,12 @@
     return s.materials[r.material] > 0 && Math.min(2, Math.floor(s.xp.craft / 3) + (legacy ? 1 : 0)) >= c.minQuality && (!c.traitRequired || traits.includes(c.traitRequired));
   }
   function duplicateRequest(s, id) { return [...s.orders, ...s.explorations, ...s.commissions, ...s.journey.outings].some(t => t.requestId === id); }
-  function pendingReview(s) { return !!s.monthReview && s.monthReview.cursor < s.monthReview.entries.length; }
-  function validateReview(s) {
-    const r = s.monthReview;
-    // schema 5 files made before v0.11 have no receipt; do not invent past entries.
-    if (r === undefined || r === null) return;
-    const bad = () => fail('存檔月結記錄不正確。');
-    if (!r || typeof r !== 'object' || Array.isArray(r) || r.month !== s.month || r.month !== s.lastSettled
-      || !integer(r.month, 1) || !Array.isArray(r.entries) || r.entries.length < 1 || r.entries.length > 20001
-      || !integer(r.cursor, 0, r.entries.length) || !r.wallet || !integer(r.wallet.coins) || !integer(r.wallet.debt)) bad();
-    const fee = r.entries[0], cash = Math.min(8, r.wallet.coins), debt = 8 - cash;
-    if (!fee || fee.kind !== 'money' || fee.source !== 'living' || fee.amount !== 8 || fee.cashPaid !== cash || fee.debtAdded !== debt || !integer(r.wallet.debt + debt)) bad();
-    const completed = Object.values(s.items).filter(i => i.finishedMonth === r.month).map(i => i.id);
-    if (r.entries.length !== completed.length + 1 || !r.entries.slice(1).every((e, n) => e?.kind === 'finished' && e.itemId === completed[n])) bad();
-    if (pendingReview(s) && (!s.open || s.coins !== r.wallet.coins - cash || s.debt !== r.wallet.debt + debt)) bad();
-  }
   function checkRequestId(id) { if (typeof id !== 'string' || !id || id.length > 100) fail('委託識別碼不正確。'); }
   function dispatch(state, a) {
     if (!a || typeof a.type !== 'string') fail('操作格式不正確。');
     if (a.expectedRevision !== undefined && a.expectedRevision !== state.revision) fail('這個操作已處理，請使用目前畫面的按鈕。');
-    if (pendingReview(state) && a.type !== 'review-next') fail('本月已經營業；先閱完月結，再使用櫃臺與工坊。');
     const s = clone(state); let message;
     switch (a.type) {
-      case 'review-next': {
-        if (!pendingReview(s) || a.month !== s.monthReview.month || a.cursor !== s.monthReview.cursor) fail('這筆月結已閱過，請使用目前的下一筆。');
-        s.monthReview.cursor++;
-        message = pendingReview(s) ? '繼續查看下一筆月結。' : '月結閱覽完成，可以開始接客。'; break;
-      }
       case 'open':
         if (s.open) fail('工坊已經營業中，沒有再次換月或扣款。');
         s.month = add(s.month, 1); s.open = true; settle(s); message = log(s, '開店。生活費、交貨與鳥信已一起更新。'); break;
@@ -546,7 +520,7 @@
     s.legacyTaskIds = s.legacyTaskIds.filter(id => pendingIds.has(id));
     s.revision = add(s.revision, 1); validate(s); return { state: s, message };
   }
-  const validate = s => { validateJourneyShape(s); validateCore(s, 5); validateJourney(s); validateReview(s); return true; };
+  const validate = s => { validateJourneyShape(s); validateCore(s, 5); validateJourney(s); return true; };
   const validateV4 = s => validateCore(s, 4);
   const validateV2 = s => validateCore(s, 2);
   const validateV3 = s => validateCore(s, 3);
@@ -840,5 +814,5 @@
     if (d.schema === 4) return migrateV4(d.state);
     validate(d.state); return clone(d.state);
   }
-  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, canScout, journeyProgress, journeyHint, roadState, explorationQuantity, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, useResult, orderQuote, dispatch, pendingReview, validate, exportSave, importSave };
+  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, canScout, journeyProgress, journeyHint, roadState, explorationQuantity, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, useResult, orderQuote, dispatch, validate, exportSave, importSave };
 });

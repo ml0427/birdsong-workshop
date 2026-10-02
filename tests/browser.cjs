@@ -54,6 +54,7 @@ async function main() {
   const clickAction = async (type, properties = {}, twice = false) => {
     const found = await evaluate(`(() => { const el = [...document.querySelectorAll('[data-action]')].find(b => { const a = JSON.parse(b.dataset.action); return a.type === ${JSON.stringify(type)} && Object.entries(${JSON.stringify(properties)}).every(([k,v]) => a[k] === v); }); if (!el || el.disabled) return false; el.click(); ${twice ? 'el.click();' : ''} return true; })()`);
     assert(found, 'button available: ' + type + JSON.stringify(properties)); await delay(30);
+    if(type==='open'){assert(await evaluate('!!document.querySelector(".month-review") && !document.querySelector("[aria-label=目前顧客]")'),'monthly receipt before counter');let n=0;while(await evaluate('[...document.querySelectorAll("[data-action]")].some(b=>JSON.parse(b.dataset.action).type==="review-next")')){assert(n++<20002,'receipt bounded');await clickAction('review-next');}}
   };
   const clickTab = async tab => { assert(await evaluate(`(() => { const el = document.querySelector('[data-tab="${tab}"]'); if(!el) return false; el.click(); return true; })()`), 'tab ' + tab); };
   const screenshot = async name => { const { data } = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }); fs.writeFileSync(path.join(qa, name), Buffer.from(data, 'base64')); };
@@ -75,7 +76,7 @@ async function main() {
   await evaluate('localStorage.clear(); location.reload()'); await ready();
 
   assert.equal(await evaluate('document.documentElement.lang'), 'zh-Hant');
-  assert(await evaluate('document.getElementById("version").textContent.includes("v0.10")'));
+  assert(await evaluate('document.getElementById("version").textContent.includes("v0.11")'));
   assert.equal((await snapshot()).materials.木頭,3);
   assert(await evaluate('!!document.querySelector(".door-only #door") && !document.querySelector(".visitor")'));
   assert(!await evaluate('document.body.innerText.includes("銅")'));

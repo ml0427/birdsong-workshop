@@ -22,9 +22,12 @@ function view(options={}){
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../app.js'),'utf8'),context);
  const html=()=>element('app').innerHTML;
  const buttons=()=>[...html().matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].map(m=>{const attr=m[1],data={};for(const a of attr.matchAll(/data-([a-z]+)="([^"]*)"/g))data[a[1]]=decode(a[2]);return {dataset:data,disabled:/\bdisabled\b/.test(attr),label:decode(m[2]),action:data.action?JSON.parse(data.action):null};});
- const click=b=>{assert(b,'missing button');return documentListeners.get('click')({target:{closest:()=>b}});};
+ // Legacy feature checks read the new receipt cards as setup; monthly tests set
+ // autoReview:false and exercise the exact sequence without this convenience.
+ const reviewAll=async()=>{let n=0,b;while((b=buttons().find(b=>b.action?.type==='review-next'))){assert(n++<20002,'receipt loop');await documentListeners.get('click')({target:{closest:()=>b}});}};
+ const click=async b=>{assert(b,'missing button');await documentListeners.get('click')({target:{closest:()=>b}});if(options.autoReview!==false&&JSON.parse(b.dataset.action||'{}').type==='open')await reviewAll();};
  return {element,storage,downloads,options,html,buttons,raw:()=>storage.get(KEY),state:()=>W.importSave(storage.get(KEY)),notice:()=>element('notice').textContent,
-  button(type,props={}){const b=buttons().find(b=>b.action?.type===type&&Object.entries(props).every(([k,v])=>b.action[k]===v));assert(b,'missing '+type);return b;},
+  reviewAll,button(type,props={}){const b=buttons().find(b=>b.action?.type===type&&Object.entries(props).every(([k,v])=>b.action[k]===v));assert(b,'missing '+type);return b;},
   click,clickAction(type,props={}){return click(this.button(type,props));},clickTab(tab){return click(buttons().find(b=>b.dataset.tab===tab));},clickTool(tool){return click(buttons().find(b=>b.dataset.tool===tool));},
   async idle(){for(let n=0;n<8;n++)await Promise.resolve();},answer(yes){const d=element('confirm-dialog');assert(d.open,'confirmation not open');return d.close(yes?'yes':'cancel');},
   importFile(file){return element('import-file').fire('change',{target:{files:[file],value:'file.json'}});},

@@ -1,7 +1,9 @@
 'use strict';
 const assert = require('node:assert/strict');
 const W = require('../engine.js');
-function game() { return { s: W.initialState(), do(a) { const r = W.dispatch(this.s, a); this.s = r.state; return r; }, npc(a) { const v = W.activeVisit(this.s); return this.do({ visitId: v?.id, counterId: v?.counterId, ...a }); } }; }
+// Existing feature campaigns explicitly read every receipt as setup before continuing.
+// Dedicated monthly tests use raw dispatch and verify each intermediate card.
+function game() { return { s: W.initialState(), do(a) { const r = W.dispatch(this.s, a); this.s = r.state; if(a.type==='open')while(W.pendingReview(this.s))this.do({type:'review-next',month:this.s.monthReview.month,cursor:this.s.monthReview.cursor});return {...r,state:this.s}; }, npc(a) { const v = W.activeVisit(this.s); return this.do({ visitId: v?.id, counterId: v?.counterId, ...a }); } }; }
 function craft(g, recipe) { g.do({ type: 'craft', recipe }); return Object.values(g.s.items).at(-1); }
 function intro(g) {
   const staff = craft(g, 'staff'), sword = craft(g, 'sword'); g.do({ type: 'open' });
