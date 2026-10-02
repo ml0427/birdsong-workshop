@@ -3,13 +3,24 @@
  const W=window.Workshop,S=window.WorkshopLabScenarios,lab=window.WorkshopLab.create(S),tips=window.WorkshopTraitTips.create(document,window,W.TRAITS);
  const $=id=>document.getElementById(id),escape=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  let pointerUntil=0,pointerGuard=false;
+ const selections={};
+ const equipmentSamples=new Set(['staff','sword'].map(recipe=>W.inventory(S.equipment.state).find(i=>i.returned&&i.recipe===recipe)?.id).filter(Boolean));
  const modes=[['forge','鍛造','無限材料；正常月份工期與完工。'],['equipment','裝備整理','退役舊物、鑑定、修復、熔鍊與傳承。'],['trade','櫃臺交易','本人領貨、推薦、製作委託與排隊。'],['materials','材料取得','採購、探索、交付與每人一件任務。'],['growth-cen','客人成長與劇情','三位角色目標前與缺裝備情境。'],['operations','店舖營運','生活費、欠款、逐卡月結與工期。']];
  function button(label,fields,disabled=false){return `<button ${disabled?'disabled':''} data-action="${escape(JSON.stringify(lab.action(fields)))}">${escape(label)}</button>`;}
  function notice(text,error=false){$('notice').textContent=text;$('notice').classList.toggle('error',error);}
  function section(title,body,extra=''){return `<section class="lab-section ${extra}"><h2>${escape(title)}</h2>${body}</section>`;}
  function itemCard(i,actions=''){return `<article class="lab-card"><h3>${escape(W.RECIPES[i.recipe].name)} <small>${escape(i.id)}</small></h3><p>${W.QUALITY[i.quality]}・效能 ${W.performance(i)}・耐久 ${i.durability}／${i.maxDurability}</p><p>${tips.labels(i)}${i.legacy?'・承接舊物 '+escape(i.legacy):''}</p>${actions}</article>`;}
  function materials(infinite=false){return `<div class="lab-materials">${W.knownMaterials(lab.state).map(m=>`<span>${m} <strong>${infinite?'∞':lab.state.materials[m]}</strong></span>`).join('')}</div>`;}
- function recipes(){const s=lab.state;return `<div class="lab-recipes">${W.visibleRecipes(s).map(id=>{const r=W.RECIPES[id];return `<article class="lab-card"><h3>${r.name}</h3><p>${r.material} 1・${W.CRAFT_MONTHS[id]} 個月</p><p>${tips.labels(W.productionTraits(s,id))}</p>${button('開始製作',{type:'craft',recipe:id},lab.scene.mode!=='forge'&&s.materials[r.material]<1)}</article>`;}).join('')}</div>`;}
+ function recipes(compact=false){const s=lab.state,ids=W.visibleRecipes(s);
+  if(compact){const selected=ids.includes(selections[lab.key])?selections[lab.key]:lab.scene.mode==='equipment'&&ids.includes('bracer')?'bracer':ids[0];selections[lab.key]=selected;const r=W.RECIPES[selected];
+   return `<div class="lab-recipe-picker"><label for="lab-recipe">選擇配方（${ids.length} 種）</label><select id="lab-recipe">${ids.map(id=>`<option value="${id}" ${id===selected?'selected':''}>${W.RECIPES[id].name}・${W.CRAFT_MONTHS[id]} 月</option>`).join('')}</select><article class="lab-card"><h3>${r.name}</h3><p>${r.material} 1・${W.CRAFT_MONTHS[selected]} 個月</p><p>${tips.labels(W.productionTraits(s,selected))}</p>${button('開始製作',{type:'craft',recipe:selected},lab.scene.mode!=='forge'&&s.materials[r.material]<1)}</article></div>`;
+  }
+  return `<div class="lab-recipes">${ids.map(id=>{const r=W.RECIPES[id];return `<article class="lab-card"><h3>${r.name}</h3><p>${r.material} 1・${W.CRAFT_MONTHS[id]} 個月</p><p>${tips.labels(W.productionTraits(s,id))}</p>${button('開始製作',{type:'craft',recipe:id},lab.scene.mode!=='forge'&&s.materials[r.material]<1)}</article>`;}).join('')}</div>`;
+ }
+ function equipment(){const s=lab.state,initial=new Set(lab.scene.initialItemIds),items=W.inventory(s),samples=items.filter(i=>equipmentSamples.has(i.id)),others=items.filter(i=>initial.has(i.id)&&!equipmentSamples.has(i.id)),fresh=items.filter(i=>!initial.has(i.id));
+  const card=i=>itemCard(i,`${button('鑑定',{type:'appraise',itemId:i.id},i.appraised||!W.canAppraise(s))}${i.returned?button('修復一次',{type:'repair',itemId:i.id},i.repaired)+button('熔鍊為材料與傳承',{type:'smelt',itemId:i.id}):''}`);
+  return `${materials()}<div class="lab-grid">${section('代表舊物與本次新作',`<div class="lab-list lab-samples">${samples.map(card).join('')||'<p>代表樣本已整理，可展開其他庫存繼續。</p>'}${fresh.length?'<h3>此次新作</h3>'+fresh.map(card).join(''):''}</div><details class="lab-other-items"><summary>其他庫存（${others.length} 件）</summary><div class="lab-list">${others.map(card).join('')||'<p>其他舊物已整理。</p>'}</div></details>`)}${section('下一件同材料傳承',`<p>${s.legacies.filter(l=>!l.usedBy).map(l=>escape(l.material)+'：'+tips.labels(l.traits)).join('；')||'沒有待用傳承。'}</p>${recipes(true)}${production(true)}`)}</div>`;
+ }
  function production(onlyNew=false){const s=lab.state,ids=new Set(lab.scene.initialItemIds),items=Object.values(s.items).filter(i=>i.status==='crafting'&&(!onlyNew||!ids.has(i.id)));return `<div class="lab-list">${items.map(i=>`<article class="lab-card"><h3>${W.RECIPES[i.recipe].name}</h3><p>第 ${i.dueMonth} 月開店完工・還需 ${Math.max(0,i.dueMonth-s.month)} 月${i.reservedFor?'・預留給 '+W.PEOPLE[s.commissions.find(c=>c.id===i.reservedFor).npc].name:''}</p></article>`).join('')||'<p>尚無在製品。</p>'}</div>`;}
  function commissions(){const s=lab.state;return s.commissions.filter(c=>!['delivered','cancelled'].includes(c.status)).map(c=>`<article class="lab-card"><h3>${W.PEOPLE[c.npc].name}・${W.RECIPES[c.recipe].name}</h3><p>${({accepted:'待開工',crafting:'製作中',ready:'等待本人領貨'})[c.status]}</p>${c.status==='accepted'?button('依委託開工',{type:'craft',commissionId:c.id},!W.canStartCommission(s,c)):''}</article>`).join('')||'<p>沒有待交製作委託。</p>';}
  function counter(financeOnly=false){const s=lab.state,v=W.activeVisit(s);if(!v)return section('櫃臺',`<p>${s.open?'本月接待已完成。':'先開店再接待。'}</p>`);
@@ -22,26 +33,28 @@
  function receipts(){const s=lab.state,r=s.monthReview,e=r.entries[r.cursor],last=r.cursor===r.entries.length-1;return `<section class="lab-section lab-receipt"><h2>第 ${s.month} 月・第 ${r.cursor+1}／${r.entries.length} 筆</h2>${e.kind==='money'?`<h3>生活費 ${e.amount} 枚</h3><p>現金支付 ${e.cashPaid} 枚，新欠款 ${e.debtAdded} 枚。</p>${ledger()}`:itemCard(s.items[e.itemId])}${button(last?'閱完，開始營業':'下一筆',{type:'review-next',month:r.month,cursor:r.cursor})}</section>`;}
  function growth(){const s=lab.state,npc=lab.scene.npc,p=W.characterProgress(s,npc);return `<div class="lab-growth-select">${['growth-cen','growth-he','growth-shu','growth-gap'].map(key=>`<button data-scene="${key}" ${key===lab.key?'disabled':''}>${escape(S[key].title)}</button>`).join('')}</div><div class="lab-grid">${section(`${W.PEOPLE[npc].name}・等級 ${p.level}・${p.abilityName} ${p.ability}`,`<h3>${escape(p.goalTitle)}${p.completed?'・已完成':''}</h3><p>${escape(p.hint)}</p><p>${escape(p.abilityText)}</p><ol class="lab-history">${p.history.map(h=>`<li>第 ${h.month} 月：${escape(h.title)}${h.grows?'（成長經歷）':''}</li>`).join('')}</ol><div class="lab-list">${W.owned(s,npc).map(i=>itemCard(i)).join('')||'<p>沒有持有裝備。</p>'}</div>`)}${counter()}</div><details><summary>補裝與待交貨（依正常排隊，不能跳過本人）</summary>${materials()}<div class="lab-grid">${section('可製作裝備',recipes())}${section('製作委託',commissions()+production())}</div></details>`;}
  function materialScreen(){const s=lab.state,v=W.activeVisit(s),busy=v&&W.pendingTasks(s,v.npc),jobs=[...s.orders,...s.explorations,...s.journey.outings];return `${ledger()}${materials()}<div class="lab-grid">${section('當面交代',v?`<h3>${W.PEOPLE[v.npc].name}</h3><p>${escape(W.requestDetail(v))}</p><p>${busy.length?'已有背景任務：'+busy.map(t=>escape(t.label)).join('、'):'目前可接受一件材料任務。'}</p><div class="lab-form"><label>材料 <select id="lab-material">${W.knownMaterials(s).map(m=>`<option>${m}</option>`).join('')}</select></label><label>數量 <input id="lab-quantity" type="number" min="1" step="1" value="2"></label></div><p>木頭3、鐵6、銅10、銀16、金24枚／個；委託時扣款，不足記欠款。</p>${button('委託採購',{type:'order-form'},!!busy.length)}${button('探索新材料（6枚）',{type:'explore'},!!busy.length||!W.nextUnknown(s))}${W.canScout(s)?button('近程勘路（6枚）',{type:'scout'},!!busy.length||v.npc!=='he'):''}${W.canGather(s,v.npc)?button('驛道採集（6枚）',{type:'gather-form'},!!busy.length):''}${button(v.phase==='service'?'送客':'婉拒，接下一位',{type:v.phase==='service'?'leave':'decline'})}`:'<p>先開店或下月接待，才能當面委託。</p>')}${section('任務與交付',`<div class="lab-list">${jobs.slice().reverse().map(t=>`<article class="lab-card"><h3>${W.PEOPLE[t.npc].name}・${escape(t.material||'近程勘路')}</h3><p>${t.status==='pending'?'第 '+t.due+' 月交付':'已交付：第 '+t.deliveredMonth+' 月'}・${t.quantity} 個・${t.cost} 枚</p></article>`).join('')||'<p>尚無派遣。採購與探索共用每人一件限制。</p>'}</div><p>已辨識：${W.knownMaterials(s).join('、')}</p><details><summary>最近材料鳥信</summary>${s.news.filter(n=>/^(delivery-order-|exploration-|outing-)/.test(n.id)).slice(-6).map(n=>`<p>${escape(n.text)}</p>`).join('')||'<p>交付後由魔法鳥送達。</p>'}</details>`)}</div>`;}
- function render(){tips.hide();const s=lab.state,scene=lab.scene;
+ function render(){tips.hide();const s=lab.state,scene=lab.scene;$('lab-app').setAttribute('data-mode',scene?.mode||'');
   if(!s){$('lab-controls').innerHTML='';$('lab-app').innerHTML=`<div class="lab-menu">${modes.map(([key,title,text],i)=>`<button data-scene="${key}"><strong>${i+1} ${title}</strong><span>${text}</span></button>`).join('')}</div>`;return;}
   const review=W.pendingReview(s);$('lab-controls').innerHTML=`<button data-tool="menu">選擇測試</button><button data-tool="reset">重置目前情境</button><strong>${escape(scene.title)}</strong><span class="lab-month">第 ${s.month} 月・${s.open?'營業中':'關店中'}</span>${button('開店，前進一月',{type:'open'},s.open||review)}${button('關店',{type:'close'},!s.open||review)}`;
   let html='';
   if(scene.mode==='operations'&&review)html=receipts();
-  else if(scene.mode==='forge'){const ids=new Set(scene.initialItemIds);html=`${materials(true)}<div class="lab-grid three">${section('配方',recipes())}${section('製作排程',production(true))}${section('此次成品',`<div class="lab-list">${W.inventory(s).filter(i=>!ids.has(i.id)).map(i=>itemCard(i)).join('')||'<p>作品完工後顯示於此。</p>'}</div>`)}</div>`;}
-  else if(scene.mode==='equipment')html=`${materials()}<div class="lab-grid">${section('舊物與成品',`<div class="lab-list">${W.inventory(s).map(i=>itemCard(i,`${button('鑑定',{type:'appraise',itemId:i.id},i.appraised||!W.canAppraise(s))}${i.returned?button('修復一次',{type:'repair',itemId:i.id},i.repaired)+button('熔鍊為材料與傳承',{type:'smelt',itemId:i.id}):''}`)).join('')}</div>`)}${section('下一件同材料傳承',`<p>${s.legacies.filter(l=>!l.usedBy).map(l=>escape(l.material)+'：'+tips.labels(l.traits)).join('；')||'沒有待用傳承。'}</p>${recipes()}${production(true)}`)}</div>`;
+  else if(scene.mode==='forge'){const ids=new Set(scene.initialItemIds);html=`${materials(true)}<div class="lab-grid lab-forge">${section('配方',recipes(true))}${section('製作排程',production(true))}${section('此次成品',`<div class="lab-list">${W.inventory(s).filter(i=>!ids.has(i.id)).map(i=>itemCard(i)).join('')||'<p>作品完工後顯示於此。</p>'}</div>`)}</div>`;}
+  else if(scene.mode==='equipment')html=equipment();
   else if(scene.mode==='trade')html=`${ledger()}<div class="lab-grid">${counter()}${section('現貨與委託',`<details><summary>全部庫存</summary><div class="lab-list">${W.inventory(s).map(i=>itemCard(i)).join('')||'<p>沒有現貨。</p>'}</div></details>${commissions()}${production()}`)}</div>`;
   else if(scene.mode==='materials')html=materialScreen();
   else if(scene.mode==='growth')html=growth();
   else html=`${ledger()}<div class="lab-grid">${section('工期與收支',`${production()}<details><summary>最近工坊記事</summary>${s.log.slice(-8).map(t=>`<p>${escape(t)}</p>`).join('')}</details><p>關店不結算；下次開店逐筆生活費與完工卡。收入先抵欠款。</p>`)}${counter(true)}</div>`;
-  $('lab-app').innerHTML=`<p class="lab-intro">${escape(scene.intro)}</p>${html}`;
+  $('lab-app').innerHTML=`<p class="lab-intro"><strong>起始情境：</strong>${escape(scene.intro)}</p>${html}`;
  }
  document.addEventListener('click',event=>{const b=event.target.closest('button');if(!b||b.disabled){tips.click(event);return;}
   const pointer=event.detail>0||['touch','pen'].includes(event.pointerType),now=performance.now();
-  if(pointer&&pointerGuard&&(now<pointerUntil||event.detail>1)){pointerUntil=now+600;event.preventDefault();event.stopPropagation();return;}if(pointer&&now>=pointerUntil)pointerGuard=false;
+  const navigation=!!b.dataset.scene||['menu','reset'].includes(b.dataset.tool);
+  if(navigation){pointerGuard=false;pointerUntil=0;}
+  if(!navigation&&pointer&&pointerGuard&&(now<pointerUntil||event.detail>1)){pointerUntil=now+600;event.preventDefault();event.stopPropagation();return;}if(pointer&&now>=pointerUntil)pointerGuard=false;
   if(tips.click(event))return;
   try{if(b.dataset.scene){lab.select(b.dataset.scene);notice('測試進度獨立；正式存檔保留。');render();return;}
    if(b.dataset.tool==='menu'){lab.menu();render();notice('選擇另一項；本頁內各情境進度保留。');return;}
-   if(b.dataset.tool==='reset'){lab.reset();render();notice('目前情境已恢復初始資料，其他情境與正式遊戲保留。');return;}
+   if(b.dataset.tool==='reset'){delete selections[lab.key];lab.reset();render();notice('目前情境已恢復初始資料，其他情境與正式遊戲保留。');return;}
    if(!b.dataset.action)return;let action=JSON.parse(b.dataset.action);
    if(action.type==='order-form')action={...action,type:'order',material:$('lab-material').value,quantity:Number($('lab-quantity').value)};
    if(action.type==='gather-form')action={...action,type:'gather-route',material:$('lab-material').value};
@@ -52,5 +65,6 @@
    b.disabled=true;const result=lab.act(action);render();notice(lab.scene.mode==='forge'&&action.type==='open'?'已前進一月；到期作品已完成。':result.message);
   }catch(error){render();notice(error.message,true);}
  });
+ document.addEventListener('change',event=>{if(event.target.id!=='lab-recipe'||!lab.scene)return;const value=event.target.value;if(!W.visibleRecipes(lab.state).includes(value))return;selections[lab.key]=value;render();$('lab-recipe').focus({preventScroll:true});});
  render();
 })();
