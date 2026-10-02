@@ -25,6 +25,8 @@ function view(options={}){
  if(options.lab){
   window.WorkshopLabScenarios=require('../lab-scenarios.js');
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../lab-core.js'),'utf8'),context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../lab-trial.js'),'utf8'),context);
+  const trialCreate=window.WorkshopTrial.create;window.WorkshopTrial.create=(opts={})=>{window.testTrialRuntime=trialCreate({...opts,...(options.trialRandom?{random:options.trialRandom}:{})});return window.testTrialRuntime;};
   const original=window.WorkshopLab.create;window.WorkshopLab.create=(...args)=>{window.testRuntime=original(...args);return window.testRuntime;};
  }
  vm.runInContext(fs.readFileSync(path.join(__dirname,options.lab?'../lab.js':'../app.js'),'utf8'),context);
@@ -34,7 +36,7 @@ function view(options={}){
  // autoReview:false and exercise the exact sequence without this convenience.
  const reviewAll=async()=>{let n=0,b;while((b=buttons().find(b=>b.action?.type==='review-next'))){assert(n++<20002,'receipt loop');await documentListeners.get('click')({target:{closest:()=>b}});}};
  const click=async b=>{assert(b,'missing button');await documentListeners.get('click')({target:{closest:()=>b}});if(options.autoReview!==false&&JSON.parse(b.dataset.action||'{}').type==='open')await reviewAll();};
- return {element,storage,downloads,options,html,buttons,window,lab:window.testRuntime,raw:()=>storage.get(KEY),state:()=>options.lab?window.testRuntime.state:W.importSave(storage.get(KEY)),notice:()=>element('notice').textContent,
+ return {element,storage,downloads,options,html,buttons,window,lab:window.testRuntime,trial:window.testTrialRuntime,raw:()=>storage.get(KEY),state:()=>options.lab?window.testRuntime.state:W.importSave(storage.get(KEY)),notice:()=>element('notice').textContent,
   emit(name,target,props={}){let prevented=false;documentListeners.get(name)?.({target,preventDefault(){prevented=true;},stopPropagation(){},...props});return prevented;},windowEvent(name){windowListeners.get(name)?.();},viewportEvent(name){viewportListeners.get(name)?.();},trait(key){const b=buttons().find(b=>b.dataset.trait===key);assert(b,'missing trait '+key);return b;},
   reviewAll,button(type,props={}){const b=buttons().find(b=>b.action?.type===type&&Object.entries(props).every(([k,v])=>b.action[k]===v));assert(b,'missing '+type);return b;},
   click,async clickEvent(b,props={}){assert(b,'missing button');let prevented=false;await documentListeners.get('click')({target:{closest:()=>b},preventDefault(){prevented=true;},stopPropagation(){},...props});return prevented;},clickAction(type,props={}){return click(this.button(type,props));},clickTab(tab){return click(buttons().find(b=>b.dataset.tab===tab));},clickTool(tool){return click(buttons().find(b=>b.dataset.tool===tool));},

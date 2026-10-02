@@ -1,6 +1,6 @@
 # 專案筆記
 
-v0.17，schema 5。SPEC.md 是單一現行規則。純 HTML/CSS/JS + Node，無依賴。正式資料夾 D:\AI_workspace\birdsong-workshop。2026-10-02 使用者明確要求「以後都自動推送」：完成修改並通過相關測試後，自動提交、同步 D 槽並推送 origin/main，不再逐次詢問、不強制推送。仍不啟動本機服務／瀏覽器；覆蓋 AGENTS.md 啟動舊例。
+v0.18，schema 5。SPEC.md 是單一現行規則。純 HTML/CSS/JS + Node，無依賴。正式資料夾 D:\AI_workspace\birdsong-workshop。2026-10-02 使用者明確要求「以後都自動推送」：完成修改並通過相關測試後，自動提交、同步 D 槽並推送 origin/main，不再逐次詢問、不強制推送。仍不啟動本機服務／瀏覽器；覆蓋 AGENTS.md 啟動舊例。
 
 保留 v0.8 月份製作、NPC 單一背景任務、指定成品／當面交貨、材料知識順序、實際使用／贈還／熔鍊及原九內容節點。普通品質售價 14／20／26；金鈴一次加價規則不變。原 demand 公平性與未知內容遮蔽繼續驗證。
 
@@ -73,3 +73,14 @@ scripts/make-lab-scenarios.cjs 以公開 campaign／actor 完整回播取得所�
 導言加明確起始情境標籤；當前狀態仍是即時帳本／櫃臺／任務。lab的menu／scene／reset導覽先排除指標轉場guard並清除前情境guard，開店／review後立刻可換模式／角色；其他狀態操作仍保留防穿透、revision與counter token。正式app guard未改。
 
 5項新回歸在修正前全部失敗，修正後與原224共229全過。涵蓋緊湊6配方切換不改state與真兩月製作、折疊庫存及修復熔鍊傳承、新作辨識、起始導言與當前金額同步、開店即導航、換角色情境、閱卡即導航／重置、同段快速閱卡仍攔截。舊3個UI測試配合select補選配方、查6個option及1個製作控制，原工期／庫存／所有權／防穿透斷言保留。VM與CSS結構回歸不是1180x760幾何複驗；交來源本人再驗。服務與瀏覽器仍不啟動。
+
+
+2026-10-02 v0.18：來源親驗v0.17一屏鍛造、選配方、開店立刻導覽、兩代表裝備與起始標記通過。依使用者提前自主改進與驚喜授權，新增鍛造測試內自由配料，不改engine.js／content.js／lab-core.js／情境種子／正式保存。
+
+lab-trial.js是測試專用模型，五種每0–20／總1–40安全整數，所有合法投入成功。最多材料決定同配比穩定用途，木鐵並列最多特例盾，其他並列較高階級；耐久8＋總量≤48，品質每10量一階最多精良。開工抽1／2個不同既有特性，guard只防護支持用途；所有隨機結果固定存在該試作item，advance只正常forge開店後呼叫，不在render、close、其他模式開店或reuse重抽。MAX安全月份／seq／revision檢查與無效操作不抽／不產物。
+
+UI新增自由／固定切換，保留v0.17主布局、5數量3欄兩排、開工與月份；配料簿初3未知，未發現不列、精確配料完工才加known name，不另分類來源或額外狀態。start／queue不使用recipe.name，data只是qty key或revision；配料簿name空到完成才寫。試作頁導言改無成品名，trait提示重繪清空舊字，按當前可見trait填無障礙描述。自由試作的護身效果說明用真useBonus及『適用本件作品』，避免列出其他未知作品名；實際效果仍用W.performance/useResult。正式tooltip效果文案保持不變。
+
+最近4件對照品質、效能／判定、耐久／磨耗、trait names，判定與磨耗是正式useResult實算，沒有NPC或實際戰鬥／磨耗。變更僅UI與測試模型，不把trial maxDurability>9的物件塞進正式state；normal month由正式dispatch成功後帶入，依正式1／2月。每情境、fixed/trial切換保留記憶，重置forge清空，其他場景／正式storage完全隔離。
+
+241項全通過：229原＋12試作，242個合法非零組合逐一開工完成涵蓋六類。驗材料因果／同比例縮放、上下界與不改狀態／不抽RNG、quality/durability有界、隨機差異／每件固定／有效traits、三態簿及精確復用、真lab.js未完工DOM/aria/提示不洩名、兩月等待／close不完工、guard說明不列未知物、近期數值對照、重繪／切頁／不同情境不重抽／存檔隔離、連點防護、reset。VM/CSS不是實際1180×760復驗；交來源本人實玩。沒有啟動本機服務或瀏覽器。

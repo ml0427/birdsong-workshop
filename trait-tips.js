@@ -28,21 +28,23 @@
     const w=Math.min(width,a.right-a.left),h=Math.min(height,a.bottom-a.top);
     return {x:clamp(anchor.left,a.left,a.right-w),y:clamp(anchor.top-h-gap,a.top,a.bottom-h),width:w,height:h};
   }
-  function create(document, window, traits) {
+  function create(document, window, traits, effectText = key => traits[key].text) {
     const tip=document.getElementById('trait-tooltip'), descriptions=document.getElementById('trait-descriptions');
     let active=null;
     tip.hidden=true;
-    descriptions.innerHTML=Object.entries(traits).map(([key,t])=>`<span id="trait-help-${escape(key)}">${escape(t.text)}</span>`).join('');
+    descriptions.innerHTML=Object.entries(traits).map(([key,t])=>`<span id="trait-help-${escape(key)}">${escape(effectText(key))}</span>`).join('');
     function labels(value) {
+      const keys=Array.isArray(value)?value:value.traits;
+      for(const key of keys)if(!descriptions.innerHTML.includes(`id="trait-help-${key}"`))descriptions.innerHTML+=`<span id="trait-help-${escape(key)}">${escape(effectText(key))}</span>`;
       return (Array.isArray(value)?value:value.traits).map(key=>`<button type="button" class="trait-name" data-trait="${escape(key)}" aria-describedby="trait-help-${escape(key)}" aria-controls="trait-tooltip" aria-expanded="false">${escape(traits[key].name)}</button>`).join('<span aria-hidden="true">、</span>');
     }
     const target=e=>{const b=e.target?.closest?.('[data-trait]');return b && Object.hasOwn(traits,b.dataset?.trait)?b:null;};
     const inTip=node=>!!node && (node===tip || tip.contains(node));
-    function hide() { if(active)active.trigger.setAttribute('aria-expanded','false');active=null;tip.hidden=true; }
+    function hide() { if(active)active.trigger.setAttribute('aria-expanded','false');active=null;tip.hidden=true;tip.textContent=''; }
     function show(b,mode) {
       if(active?.trigger!==b){hide();active={trigger:b,pinned:false,hovered:false,focused:false};}
       if(mode==='hover')active.hovered=true;if(mode==='focus')active.focused=true;if(mode==='pin')active.pinned=true;
-      tip.textContent=`${traits[b.dataset.trait].name}：${traits[b.dataset.trait].text}`;
+      tip.textContent=`${traits[b.dataset.trait].name}：${effectText(b.dataset.trait)}`;
       const v=window.visualViewport,viewport={left:v?.offsetLeft||0,top:v?.offsetTop||0,width:v?.width||window.innerWidth,height:v?.height||window.innerHeight};
       tip.style.maxWidth=Math.min(320,Math.max(1,viewport.width-16))+'px';tip.style.maxHeight=Math.max(1,viewport.height-16)+'px';
       tip.hidden=false;tip.style.visibility='hidden';
@@ -65,7 +67,7 @@
     document.addEventListener('toggle',hide,true);
     window.addEventListener('resize',hide);window.addEventListener('blur',hide);
     window.visualViewport?.addEventListener('resize',hide);window.visualViewport?.addEventListener('scroll',hide);
-    return {labels,click,hide};
+    return {labels,click,hide,resetDescriptions(){descriptions.innerHTML='';}};
   }
   return {create,place};
 });

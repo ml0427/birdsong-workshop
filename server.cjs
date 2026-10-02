@@ -7,7 +7,7 @@ const port = Number(process.env.PORT || 4317);
 const root = __dirname;
 const allowed = new Map([
   ['/lab.html', ['lab.html', 'text/html']], ['/lab.css', ['lab.css', 'text/css']],
-  ...['lab-core.js', 'lab-scenarios.js', 'lab.js'].map(file => ['/' + file, [file, 'text/javascript']]),
+  ...['lab-core.js', 'lab-scenarios.js', 'lab-trial.js', 'lab.js'].map(file => ['/' + file, [file, 'text/javascript']]),
   ['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']],
   ['/style.css', ['style.css', 'text/css']], ['/engine.js', ['engine.js', 'text/javascript']],
   ['/trait-tips.js', ['trait-tips.js', 'text/javascript']], ['/app.js', ['app.js', 'text/javascript']], ['/content.js', ['content.js', 'text/javascript']], ['/build-info.json', ['build-info.json', 'application/json']]
