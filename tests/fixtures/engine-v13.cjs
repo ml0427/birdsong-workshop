@@ -1,5 +1,5 @@
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./content.js') : root.WorkshopContent);
+  const api = factory(typeof module === 'object' && module.exports ? require('../../content.js') : root.WorkshopContent);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.Workshop = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (CONTENT) {
@@ -35,7 +35,7 @@
     return { schema: 5, revision: 0, month: 0, lastSettled: 0, open: false, coins: 20, debt: 0, seq: 0, monthReview: null,
       materials: { 木頭: 3, 鐵: 3, 銅: 0, 銀: 0, 金: 0 }, knownMaterials: ['木頭', '鐵'], explorations: [], commissions: [], legacyTaskIds: [], items: {}, xp: { craft: 0, appraisal: 0 }, reputation: 0,
       npcs: Object.fromEntries(Object.keys(PEOPLE).map(id => [id, { trust: 0, story: false, goldDone: false, storyItem: null }])),
-      tutorial: { sold: [], ordered: false, delivered: false }, orders: [], visits: [], news: [], returns: [], legacies: [], content: emptyContent(), journey: emptyJourney(), personal: { events: [] },
+      tutorial: { sold: [], ordered: false, delivered: false }, orders: [], visits: [], news: [], returns: [], legacies: [], content: emptyContent(), journey: emptyJourney(),
       log: ['師傅留下木頭與鐵各 3 個。先開始木杖和鐵劍，下次開店完成，熟客阿岑會來收。'] };
   }
   const inventory = s => Object.values(s.items).filter(i => i.status === 'inventory');
@@ -55,11 +55,11 @@
   function unlocked(s, id) {
     if (!RECIPES[id] || !s.knownMaterials.includes(RECIPES[id].material)) return false;
     if (id === 'staff' || id === 'sword') return true;
-    if (!openingDone(s)) return false;
+    if (!s.tutorial.delivered) return false;
     return id === 'shield' || id === 'bracer' && s.xp.craft >= 2 || id === 'amulet' && (s.xp.craft >= 4 || s.reputation >= 3) || id === 'bell' && s.xp.craft >= 6 && s.reputation >= 5;
   }
   const price = i => QUALITY_PRICE[i.quality];
-  const canAppraise = s => openingDone(s) && s.visits.some(v => v.npc === 'he' && v.asked);
+  const canAppraise = s => s.tutorial.delivered && s.visits.some(v => v.npc === 'he' && v.asked);
   function visibleRecipes(s) {
     const learned = new Set(['staff', 'sword', ...Object.values(s.items).map(i => i.recipe)]);
     for (const v of s.visits) if (v.asked) for (const r of v.needs) learned.add(r);
@@ -133,7 +133,7 @@
     const count = Number(!!nearProof(s, month)) + ['he-wrist', 'he-shield'].filter(key => eventDone(s, key)?.month <= month).length;
     return { level: 1 + Math.floor(count / 2), pathfinding: count };
   }
-  function canScout(s) { return openingDone(s) && !nearProof(s) && !s.journey.outings.some(o => o.kind === 'scout'); }
+  function canScout(s) { return s.tutorial.delivered && !nearProof(s) && !s.journey.outings.some(o => o.kind === 'scout'); }
   function journeyProgress(s) { return { ...s.journey.growth.he, stage: s.journey.events.length }; }
   function roadState(s) { return s.journey.events.some(e => e.key === 'road-open') ? 'restored' : s.journey.events.some(e => e.key === 'he-survey') ? 'marked' : 'unknown'; }
   function explorationQuantity(s) { return roadState(s) === 'restored' ? 3 : 2; }
@@ -149,7 +149,7 @@
   }
   function journeyHint(s) {
     const p = journeyProgress(s);
-    if (!openingDone(s)) return '先完成開場交易，再從實際路線與防護使用累積辨路。';
+    if (!s.tutorial.delivered) return '';
     if (p.stage === 0 && pendingTasks(s, 'he').some(t => t.label.includes('勘路') || t.label.includes('探索'))) return '近程行動已出發，下月回報；目前先等結果。';
     if (p.stage === 0) return nearProof(s) ? '近程探索的路線我記下了，下次整理給你。' : '我想先熟悉近程路線；可以託我勘路，或探索一條新材料線索。';
     if (p.stage === 1) return eventDone(s, 'he-wrist') ? '溪口的使用經歷已記下，下次整理那條舊路的線索。' : '近程路線已熟悉；還要親自試過手臂防護，才知道溪口能怎麼走。';
@@ -213,98 +213,6 @@
     s.journey.events.push({ key, month: s.month, source, gear, ...earnedGrowth(s), newsId, text });
     news(s, newsId, text, gear[0]?.itemId || null);
   }
-  const PERSONAL_GOALS = {
-    cen: { key: 'cen-route', title: '驛道試走', earlyTitle: '照路與防護', ability: '行路', source: 'cen-shield',
-      gear: [{ recipe: 'staff', score: 5, trait: 'light' }, { recipe: 'shield', score: 4, trait: 'solid' }] },
-    shu: { key: 'shu-watch', title: '驛道警示', earlyTitle: '防護與警示', ability: '感知', source: 'shu-bell',
-      gear: [{ recipe: 'amulet', score: 10, trait: 'guard' }, { recipe: 'bell', score: 13, trait: 'light' }] }
-  };
-  const personalEvents = s => s.personal?.events || [];
-  const personalDone = (s, npc) => personalEvents(s).find(e => e.npc === npc) || null;
-  function rememberVisit(s) {
-    const v = !pendingReview(s) && activeVisit(s);
-    if (v && v.metMonth === undefined) v.metMonth = s.month;
-  }
-  function knownPeople(s) {
-    const current = !pendingReview(s) && activeVisit(s);
-    return Object.keys(PEOPLE).filter(npc => current?.npc === npc || s.visits.some(v => v.npc === npc && (v.metMonth !== undefined || v.asked || v.status !== 'waiting')) || Object.values(s.items).some(i => i.episodes.some(e => e.npc === npc)));
-  }
-  function firstExploration(s, npc, month) {
-    return s.explorations.filter(e => e.npc === npc && e.status === 'delivered' && e.deliveredMonth <= month && s.news.some(n => n.id === `exploration-${e.id}` && n.month === e.deliveredMonth && n.text.startsWith(PEOPLE[npc].name))).sort((a,b) => a.deliveredMonth-b.deliveredMonth || a.id.localeCompare(b.id))[0] || null;
-  }
-  function growthProofs(s, npc, month = s.month) {
-    const keys = { cen: ['cen-path', 'cen-shield'], he: ['he-wrist', 'he-shield'], shu: ['shu-amulet', 'shu-bell', 'shu-focus'] }[npc];
-    const proofs = keys.map(key => eventDone(s, key)).filter(e => e && e.actor === npc && e.month <= month)
-      .map(e => ({ id: e.key, title: CONTENT.EVENTS.find(d => d.id === e.key).title, month: e.month }));
-    const route = npc === 'he' ? nearProof(s, month) : npc === 'cen' ? firstExploration(s, npc, month) : null;
-    if (route) proofs.unshift({ id: npc === 'he' ? 'near' : 'exploration', title: route.source === 'outing' ? '近程勘路' : '材料探索', month: route.deliveredMonth });
-    return proofs;
-  }
-  function characterGrowth(s, npc, month = s.month) {
-    const count = growthProofs(s, npc, month).length;
-    return { level: 1 + Math.floor(count / 2), ability: count, abilityName: npc === 'he' ? '辨路' : PERSONAL_GOALS[npc].ability };
-  }
-  function characterHistory(s, npc) {
-    const growth = growthProofs(s, npc), out = s.content.events.filter(e => e.npc === npc).map(e => ({ id: e.key, month: e.month, title: CONTENT.EVENTS.find(d => d.id === e.key).title, grows: growth.some(p => p.id === e.key) }));
-    for (const p of growth.filter(p => ['near', 'exploration'].includes(p.id))) out.push({ ...p, grows: true });
-    const done = personalDone(s, npc);
-    if (done) out.push({ id: done.key, month: done.month, title: PERSONAL_GOALS[npc].title, grows: false });
-    if (npc === 'he') for (const e of s.journey.events) out.push({ id: e.key, month: e.month, title: { 'he-near': '近程路線整理', 'he-clue': '舊路標線索', 'he-survey': '路標勘查', 'road-open': '驛道重通' }[e.key], grows: false });
-    return out.sort((a,b) => a.month-b.month || a.id.localeCompare(b.id));
-  }
-  function personalGear(s, npc, requirement, justUsed = false) {
-    return owned(s, npc).find(i => i.recipe === requirement.recipe && performance(i) >= requirement.score && i.traits.includes(requirement.trait) && i.durability >= 4
-      && !s.returns.some(o => o.itemId === i.id && o.status === 'offered')
-      && (justUsed ? episode(i).since < s.month && episode(i).lastUsedMonth === s.month : i.durability - useResult(i).wear >= 4)) || null;
-  }
-  function personalHint(s, npc) {
-    if (npc === 'he') return journeyHint(s);
-    const def = PERSONAL_GOALS[npc];
-    if (personalDone(s, npc)) return `${def.title}已完成；現在可當面託我沿已恢復的驛道採集已知材料，下月帶回3個。`;
-    if (npc === 'cen' && !eventDone(s, 'cen-path')) return '想先親自用木杖照路，留下夜路經歷，再試木盾防護。';
-    if (npc === 'shu' && !eventDone(s, 'shu-amulet')) return knowledgeText(s, '想先親自佩戴銀護符，確認路上干擾如何減弱。');
-    if (!eventDone(s, def.source)) return npc === 'cen' ? '照路經歷已記下；還想親自用木盾擋河堤飛石，補足行路經驗。' : knowledgeText(s, '護符的經歷已記下；想試金鈴的警示時機，補足感知經驗。');
-    if (characterGrowth(s, npc).ability < 2) return `先累積不同的實際使用經歷，讓${def.ability}達到2，再嘗試新路線。`;
-    if (roadState(s) !== 'restored') return s.journey.events.length >= 2 ? '舊驛道還未真正恢復；先保留使用經驗，等確認通路後再試。' : '先保留照路、防護或警示的經驗，等有確認的新路線，再試著運用。';
-    const missing = def.gear.find(r => !personalGear(s, npc, r));
-    if (missing) return `想補一件細緻以上、${TRAITS[missing.trait].name}的${RECIPES[missing.recipe].name}，還要能撐過下次使用；可請工坊製作，再當面領貨。${npc === 'shu' ? '護符和鈴要一起帶上路，可先並行準備兩件，或用堅固傳承減少磨耗。' : '木杖與盾要一起帶上路，兩件都得還耐用。'}`;
-    return '能力與裝備已備妥；下次親自使用後，再回報這段驛道。';
-  }
-  function characterProgress(s, npc) {
-    const g = characterGrowth(s, npc), goal = npc === 'he' ? null : PERSONAL_GOALS[npc];
-    return { ...g, history: characterHistory(s, npc), goalTitle: npc === 'he' ? s.journey.events.length >= 2 ? '舊驛道' : '近程路線與防護' : s.journey.events.length >= 2 ? goal.title : goal.earlyTitle,
-      completed: npc === 'he' ? roadState(s) === 'restored' : !!personalDone(s, npc), hint: personalHint(s, npc),
-      abilityText: `每種新的可靠經歷增加1點${g.abilityName}；每2點經歷提升1級。${npc === 'he' ? '辨路用於確認路線，判斷何時能進一步勘查。' : `${g.abilityName}達2並備好裝備、確認通路後，可完成${goal.earlyTitle}的路線目標。`}重複買賣或空過月不增加。` };
-  }
-  function personalDemand(s, npc) {
-    const def = PERSONAL_GOALS[npc];
-    if (!def || personalDone(s, npc) || roadState(s) !== 'restored' || !eventDone(s, def.source) || characterGrowth(s, npc).ability < 2) return null;
-    const missing = def.gear.find(r => !personalGear(s, npc, r));
-    return missing && unlocked(s, missing.recipe) ? { needs: [missing.recipe], reason: personalHint(s, npc), minQuality: 1, traitRequired: missing.trait, contentKey: null } : null;
-  }
-  function refreshPersonalRequests(s) {
-    for (const npc of Object.keys(PERSONAL_GOALS)) {
-      const d = personalDemand(s, npc);
-      const v = d && s.visits.find(v => v.npc === npc && v.status === 'waiting' && v.phase === 'request' && ['normal','return'].includes(v.kind) && v.needs.includes(d.needs[0]));
-      if (v) { v.minQuality = Math.max(v.minQuality, d.minQuality); v.traitRequired ||= d.traitRequired; v.reason = d.reason; }
-    }
-  }
-  function personalText(npc) {
-    return npc === 'cen' ? '阿岑沿已恢復的驛道用木杖照路，以木盾擋開飛石，完成一次穩定試走。現在可當面託他沿驛道採集已知材料。' : '望舒沿已恢復的驛道以護符抵擋干擾，對照金鈴的提前警示，完成路線確認。現在可當面託她沿驛道採集已知材料。';
-  }
-  function advancePersonal(s) {
-    const road = s.journey.events.find(e => e.key === 'road-open');
-    if (!road || road.month >= s.month) return;
-    for (const [npc, def] of Object.entries(PERSONAL_GOALS)) {
-      const growth = characterGrowth(s, npc), proof = eventDone(s, def.source);
-      if (personalDone(s, npc) || growth.ability < 2 || !proof || proof.month >= s.month) continue;
-      const gear = def.gear.map(r => personalGear(s, npc, r, true)); if (gear.some(i => !i)) continue;
-      const newsId = `personal-${def.key}`, text = personalText(npc);
-      s.personal.events.push({ key: def.key, npc, month: s.month, level: growth.level, ability: growth.ability, source: proof.key, roadMonth: road.month, gear: gear.map(journeySnapshot), newsId, text });
-      news(s, newsId, text, gear[0].id);
-    }
-  }
-  function canGather(s, npc) { return roadState(s) === 'restored' && (npc === 'he' || !!personalDone(s, npc)); }
   function eventEligible(s, def, i) {
     if (eventDone(s, def.id) || i.recipe !== def.recipe || def.requires && !eventDone(s, def.requires)) return false;
     if (def.trigger === 'cross') return i.owner !== def.npc && s.returns.some(o => o.itemId === i.id && o.npc === def.npc && o.status === 'accepted');
@@ -329,8 +237,7 @@
   function demand(s, npc) {
     const special = journeyDemand(s, npc); if (special) return special;
     const healthy = (r, q = 0) => owned(s, npc).some(i => i.recipe === r && i.durability > 3 && i.quality >= q && !s.returns.some(o => o.itemId === i.id && o.status === 'offered'));
-    const personal = personalDemand(s, npc);
-    const candidates = personal ? [personal] : [];
+    const candidates = [];
     const need = (recipe, reason, key = null, minQuality = 0) => {
       if (unlocked(s, recipe) && !healthy(recipe, minQuality)) candidates.push({ needs: [recipe], reason, minQuality, traitRequired: null, contentKey: key });
     };
@@ -392,7 +299,7 @@
     for (const o of s.journey.outings) {
       if (o.status !== 'pending' || o.due > s.month) continue;
       s.materials[o.material] = add(s.materials[o.material], o.quantity); o.status = 'delivered'; o.deliveredMonth = s.month;
-      news(s, `outing-${o.id}`, `${PEOPLE[o.npc].name}${o.kind === 'scout' ? '完成近程勘路' : '沿恢復的驛道採集'}，帶回${o.material} ${o.quantity} 個；報酬已在委託時記帳。`);
+      news(s, `outing-${o.id}`, `小禾${o.kind === 'scout' ? '完成近程勘路' : '沿恢復的驛道採集'}，帶回${o.material} ${o.quantity} 個；報酬已在委託時記帳。`);
     }
     for (const i of Object.values(s.items)) {
       if (i.status !== 'crafting' || i.dueMonth > s.month) continue;
@@ -419,9 +326,7 @@
       }
     }
     advanceJourney(s);
-    advancePersonal(s);
     refreshJourneyRequest(s);
-    refreshPersonalRequests(s);
     for (const [npc, relation] of Object.entries(s.npcs)) {
       if (relation.story || relation.trust < 3) continue;
       const source = Object.values(s.items).find(i => i.episodes.some(e => e.npc === npc && e.firstUsedMonth !== null && e.firstUsedMonth < s.month));
@@ -429,14 +334,14 @@
       relation.story = true; relation.storyItem = source.id;
       news(s, `story-v2-${npc}`, `${PEOPLE[npc].name}分享經歷：「之前確實用過你做的${RECIPES[source.recipe].name}。${source.traits.includes('guard') ? '那份護身效果' : source.traits.includes('solid') ? '它經得起磨耗' : '它便於攜帶'}讓我更安心。我願意繼續把裝備交給你照料。」`, source.id);
     }
-    if (!openingDone(s)) {
+    if (!openingDone(s) || !s.tutorial.ordered) {
       const needs = ['staff', 'sword'].filter(k => !s.tutorial.sold.includes(k));
       const intro = s.visits.find(v => v.id === 'intro-cen');
       if (intro && intro.status !== 'waiting' && !s.visits.some(v => v.npc === 'cen' && v.status === 'waiting'))
         Object.assign(intro, { month: s.month, status: 'waiting', asked: false, needs, phase: needs.length ? 'request' : 'service' });
       addVisit(s, 'cen', needs, 'intro', {}, 'intro-cen');
     }
-    else if (openingDone(s)) {
+    else if (s.tutorial.delivered) {
       for (const npc of ['he', 'cen', 'shu']) {
         const commission = s.commissions.find(c => c.npc === npc && !['delivered', 'cancelled'].includes(c.status));
         if (commission) {
@@ -457,7 +362,7 @@
     for (const v of s.visits.filter(v => v.status === 'waiting')) v.counterId = `${v.id}@${s.month}`;
     const pendingIds = new Set(Object.keys(PEOPLE).flatMap(npc => pendingTasks(s, npc).map(t => t.id)));
     s.legacyTaskIds = s.legacyTaskIds.filter(id => pendingIds.has(id));
-    if (openingDone(s) && inventory(s).length === 0 && !Object.values(s.items).some(i => i.status === 'crafting') && MATERIALS.every(m => s.materials[m] === 0) && !s.orders.some(o => o.status === 'pending') && !s.explorations.some(e => e.status === 'pending') && !s.journey.outings.some(o => o.status === 'pending')) {
+    if (s.tutorial.delivered && inventory(s).length === 0 && !Object.values(s.items).some(i => i.status === 'crafting') && MATERIALS.every(m => s.materials[m] === 0) && !s.orders.some(o => o.status === 'pending') && !s.explorations.some(e => e.status === 'pending') && !s.journey.outings.some(o => o.status === 'pending')) {
       s.materials.木頭 = 1; s.materials.鐵 = 1; news(s, `relief-${s.month}`, '阿岑送來木頭與鐵各一個作周轉：「先讓工作臺動起來，欠款可以慢慢還。」');
     }
     if (!s.news.some(n => n.month === s.month)) news(s, `month-${s.month}`, s.month === 1 ? '阿岑託魔法鳥帶來口信：「我來看看你的第一批作品。」' : '本月沒有新消息。');
@@ -470,7 +375,7 @@
       const waiting = Object.values(s.items).some(i => ['staff', 'sword'].includes(i.recipe) && i.status === 'crafting');
       return { title: waiting ? '開店推進一月，完成武器' : s.open ? '把作品推薦給阿岑' : '開店迎接阿岑', text: waiting ? '準備月開始的兩件，下次開店就完成。營業中開始則先關店再開店；沒有現實等待。' : '兩件都由阿岑自己使用。逐件推薦即可。', step: 2 };
     }
-    if (!s.tutorial.ordered) return { title: '接客與材料準備', text: '採購教學可以稍後向在場人物補學；現在可接待新需求、查看人物與鳥信，或繼續製作。', step: 3 };
+    if (!s.tutorial.ordered) return { title: '材料委託可以稍後', text: activeVisit(s)?.npc === 'cen' ? '可託阿岑探索或採購，也可以直接送客。材料教學能在之後來訪補學。' : '阿岑下次來訪仍可交代材料委託。現在可繼續製作，或關店後再開店。', step: 3 };
     if (!s.tutorial.delivered) return { title: s.open ? '等下次開店到貨' : '開店收取材料', text: s.open ? '先關店，再開店收取材料與鳥信。關店不推進月份。' : '按開店即可，材料與鳥信會一起送到。', step: 4 };
     return { title: '小禾帶來新需求', text: '先聽用途，開始製作或接客人委託；完工後再推薦或交付。', step: 5 };
   }
@@ -525,7 +430,7 @@
     if (!a || typeof a.type !== 'string') fail('操作格式不正確。');
     if (a.expectedRevision !== undefined && a.expectedRevision !== state.revision) fail('這個操作已處理，請使用目前畫面的按鈕。');
     if (pendingReview(state) && a.type !== 'review-next') fail('本月已經營業；先閱完月結，再使用櫃臺與工坊。');
-    const s = clone(state); s.personal ||= { events: [] }; rememberVisit(s); let message;
+    const s = clone(state); let message;
     switch (a.type) {
       case 'review-next': {
         if (!pendingReview(s) || a.month !== s.monthReview.month || a.cursor !== s.monthReview.cursor) fail('這筆月結已閱過，請使用目前的下一筆。');
@@ -549,7 +454,7 @@
       case 'talk': {
         const v = scope(s, a); if (v.asked) fail('已經聽過這次需求了。');
         v.asked = true; s.npcs[v.npc].trust = add(s.npcs[v.npc].trust, 1);
-        const detail = requestDetail(v), hint = openingDone(s) ? personalHint(s, v.npc) : '';
+        const detail = requestDetail(v), hint = v.npc === 'he' && s.tutorial.delivered ? journeyHint(s) : '';
         message = log(s, `${PEOPLE[v.npc].name}：「${detail}${hint && !detail.includes(hint) ? ' ' + hint : ''}」`); break;
       }
       case 'sell': case 'deliver': {
@@ -595,18 +500,17 @@
       }
       case 'scout': case 'gather-route': {
         const v = scope(s, a);
-        if (!openingDone(s) || a.type === 'scout' && v.npc !== 'he') fail('先完成開場交易，再當面向小禾交代近程勘路。');
+        if (v.npc !== 'he' || !s.tutorial.delivered) fail('先完成第一批材料交付，再當面向小禾交代路線。');
         checkRequestId(a.requestId); if (duplicateRequest(s, a.requestId)) fail('這筆勘路或採集已接受，不會再扣款。');
         requireFreeTask(s, v.npc);
         const scout = a.type === 'scout';
         if (scout && (nearProof(s) || s.journey.outings.some(o => o.kind === 'scout'))) fail('近程路線已有行動紀錄，不重複勘路或增加能力。');
         if (!scout && roadState(s) !== 'restored') fail('先有實際通路恢復的消息，才能沿驛道採集。');
-        if (!scout && !canGather(s, v.npc)) fail('先完成本人的驛道目標，才能委託這位人物沿驛道採集。');
         const material = scout ? '木頭' : a.material;
         if (!s.knownMaterials.includes(material)) fail('驛道採集只能選已辨識材料。');
         const quantity = scout ? 1 : 3; add(reservedMaterial(s, material), quantity); charge(s, EXPLORATION_COST);
-        s.journey.outings.push({ id: `outing-${s.seq = add(s.seq, 1)}`, requestId: a.requestId, npc: v.npc, kind: scout ? 'scout' : 'gather', material, quantity, cost: EXPLORATION_COST, createdMonth: s.month, due: add(s.month, 1), status: 'pending', deliveredMonth: null });
-        message = log(s, `請${PEOPLE[v.npc].name}${scout ? '近程勘路' : `沿驛道採集${material}`}，報酬 6 枚；下月開店帶回${material} ${quantity} 個。`); break;
+        s.journey.outings.push({ id: `outing-${s.seq = add(s.seq, 1)}`, requestId: a.requestId, npc: 'he', kind: scout ? 'scout' : 'gather', material, quantity, cost: EXPLORATION_COST, createdMonth: s.month, due: add(s.month, 1), status: 'pending', deliveredMonth: null });
+        message = log(s, `請小禾${scout ? '近程勘路' : `沿驛道採集${material}`}，報酬 6 枚；下月開店帶回${material} ${quantity} 個。`); break;
       }
       case 'accept-commission': {
         const v = scope(s, a);
@@ -644,7 +548,7 @@
         message = log(s, `修復${RECIPES[i.recipe].name}，恢復全耐久；每件舊物可免費練習修復一次。`); break;
       }
       case 'smelt': {
-        const i = s.items[a.itemId]; if (!openingDone(s) || !i || i.status !== 'inventory' || !i.returned) fail('只可熔鍊已合理領回、仍在庫存的舊物。');
+        const i = s.items[a.itemId]; if (!s.tutorial.delivered || !i || i.status !== 'inventory' || !i.returned) fail('只可熔鍊已合理領回、仍在庫存的舊物。');
         const reserved = reservedMaterial(s, i.material); add(reserved, 1);
         i.status = 'smelted'; s.materials[i.material] = add(s.materials[i.material], 1); s.legacies.push({ itemId: i.id, material: i.material, traits: [...i.traits], usedBy: null });
         history(s, i, `熔鍊／拆解為${i.material} 1 個；${traitNames(i)}特性等待下一件同材質作品。`); message = log(s, `回收${i.material} 1 個與${traitNames(i)}特性傳承。`); break;
@@ -653,10 +557,9 @@
     }
     const pendingIds = new Set(Object.keys(PEOPLE).flatMap(npc => pendingTasks(s, npc).map(t => t.id)));
     s.legacyTaskIds = s.legacyTaskIds.filter(id => pendingIds.has(id));
-    rememberVisit(s);
     s.revision = add(s.revision, 1); validate(s); return { state: s, message };
   }
-  const validate = s => { validateJourneyShape(s); validatePersonalShape(s); validateCore(s, 5); validateJourney(s); validatePersonal(s); validateReview(s); return true; };
+  const validate = s => { validateJourneyShape(s); validateCore(s, 5); validateJourney(s); validateReview(s); return true; };
   const validateV4 = s => validateCore(s, 4);
   const validateV2 = s => validateCore(s, 2);
   const validateV3 = s => validateCore(s, 3);
@@ -780,11 +683,11 @@
     check(j.outings.filter(o => o?.kind === 'scout').length <= 1, '近程勘路重複');
     for (const o of j.outings) {
       check(o && /^outing-[1-9]\d*$/.test(o.id) && typeof o.requestId === 'string' && o.requestId.length > 0 && o.requestId.length <= 100
-        && Object.hasOwn(PEOPLE, o.npc) && ['scout', 'gather'].includes(o.kind) && s.knownMaterials.includes(o.material) && o.cost === EXPLORATION_COST
+        && o.npc === 'he' && ['scout', 'gather'].includes(o.kind) && s.knownMaterials.includes(o.material) && o.cost === EXPLORATION_COST
         && integer(o.createdMonth, 1, s.month) && integer(o.due) && o.due === o.createdMonth + 1 && ['pending', 'delivered'].includes(o.status), '勘路採集委託');
-      check(o.kind === 'scout' ? o.npc === 'he' && o.material === '木頭' && o.quantity === 1 : o.quantity === 3 && opened && opened.month <= o.createdMonth && (o.npc === 'he' || personalDone(s, o.npc)?.month <= o.createdMonth), '採集通路前置');
+      check(o.kind === 'scout' ? o.material === '木頭' && o.quantity === 1 : o.quantity === 3 && opened && opened.month <= o.createdMonth, '採集通路前置');
       check(o.status === 'pending' ? o.due > s.month && o.deliveredMonth === null : integer(o.deliveredMonth, o.due, s.month), '勘路採集交付');
-      if (o.status === 'delivered') check(s.news.some(n => n.id === `outing-${o.id}` && n.month === o.deliveredMonth && n.text.startsWith(PEOPLE[o.npc].name) && n.text.includes(`${o.material} ${o.quantity} 個`)), '勘路交付鳥信');
+      if (o.status === 'delivered') check(s.news.some(n => n.id === `outing-${o.id}` && n.month === o.deliveredMonth && n.text.startsWith('小禾') && n.text.includes(`${o.material} ${o.quantity} 個`)), '勘路交付鳥信');
       check(Number(o.id.split('-')[1]) <= s.seq, '勘路序號');
     }
     for (const material of MATERIALS) {
@@ -818,31 +721,6 @@
       check(r.newsId === `journey-${r.key}` && s.news.some(news => news.id === r.newsId && news.month === r.month && news.text === r.text && news.itemId === (r.gear[0]?.itemId || null)), '勘路鳥信證據');
     }
     return true;
-  }
-  function validatePersonalShape(s) {
-    if (s?.personal === undefined) return;
-    if (!s.personal || typeof s.personal !== 'object' || Array.isArray(s.personal) || !Array.isArray(s.personal.events) || s.personal.events.length > 2 || !s.personal.events.every(e => e && typeof e === 'object' && !Array.isArray(e))) fail('存檔格式不正確：個人目標表');
-  }
-  function validatePersonal(s) {
-    const check = (test, field) => { if (!test) fail(`存檔格式不正確：${field}`); };
-    check(s.visits.every(v => v.metMonth === undefined || integer(v.metMonth, 1, s.month)), '首次相識');
-    if (s.personal === undefined) { check(!s.news.some(n => n.id.startsWith('personal-')), '孤立個人鳥信'); return; }
-    const events = s.personal?.events;
-    check(Array.isArray(events) && events.length <= 2 && events.every(e => e && Object.hasOwn(PERSONAL_GOALS, e.npc)) && new Set(events.map(e => e.key)).size === events.length, '個人目標表');
-    for (const r of events) {
-      const def = PERSONAL_GOALS[r.npc], growth = characterGrowth(s, r.npc, r.month), proof = eventDone(s, def.source), road = s.journey.events.find(e => e.key === 'road-open');
-      check(r.key === def.key && integer(r.month, 1, s.month) && r.level === growth.level && r.ability === growth.ability && r.ability >= 2, '個人能力前置');
-      check(proof && proof.actor === r.npc && proof.month < r.month && r.source === proof.key && road && road.month === r.roadMonth && road.month < r.month, '個人使用與世界前置');
-      check(Array.isArray(r.gear) && r.gear.length === def.gear.length && new Set(r.gear.map(g => g?.itemId)).size === r.gear.length, '個人裝備快照');
-      r.gear.forEach((g, k) => {
-        const req = def.gear[k], i = s.items[g?.itemId], e = i?.episodes.find(e => e.id === g.episodeId);
-        check(i && i.recipe === req.recipe && i.traits.includes(req.trait) && g.score === performance(i) && g.score >= req.score && integer(g.before,4,9) && integer(g.after,4,g.before), '個人裝備效能');
-        check(g.before-g.after === useResult({...i,durability:g.before}).wear && e && e.npc === r.npc && e.since < r.month && (e.until === null || e.until >= r.month) && e.uses > 0 && e.firstUsedMonth <= r.month && e.lastUsedMonth >= r.month
-          && i.history.some(h => h.month === r.month && h.text.startsWith(`${PEOPLE[r.npc].name}使用「`) && h.text.includes(`耐久 ${g.before}→${g.after}／`)), '個人實際持有與磨耗');
-      });
-      check(r.newsId === `personal-${def.key}` && r.text === personalText(r.npc) && s.news.some(n => n.id === r.newsId && n.month === r.month && n.text === r.text && n.itemId === r.gear[0].itemId), '個人完成鳥信');
-    }
-    check(s.news.filter(n => n.id.startsWith('personal-')).every(n => events.some(e => e.newsId === n.id && e.month === n.month && e.text === n.text)), '孤立個人鳥信');
   }
   const LEGACY_RECIPES = { staff: {material:'木頭'}, sword:{material:'鐵'}, stool:{material:'木頭'}, watering:{material:'銅'}, lamp:{material:'銀'}, bell:{material:'金'} };
   const legacyInteger = (v, min = 0, max = 1e9) => integer(v, min, max);
@@ -975,5 +853,5 @@
     if (d.schema === 4) return migrateV4(d.state);
     validate(d.state); return clone(d.state);
   }
-  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, knownPeople, characterProgress, canGather, canScout, journeyProgress, journeyHint, roadState, explorationQuantity, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, traitDetails, productionTraits, useResult, orderQuote, dispatch, pendingReview, validate, exportSave, importSave };
+  return { MATERIALS, COST, CRAFT_MONTHS, EXPLORATION_COST, RECIPES, TRAITS, PEOPLE, CONTENT, QUALITY, QUALITY_PRICE, initialState, canScout, journeyProgress, journeyHint, roadState, explorationQuantity, knownMaterials, nextUnknown, pendingTasks, canStartCommission, inventory, owned, activeVisit, openingDone, unlocked, visibleRecipes, canAppraise, requestDetail, price, suitable, recommendationReason, tutorialStep, performance, traitNames, traitDetails, productionTraits, useResult, orderQuote, dispatch, pendingReview, validate, exportSave, importSave };
 });
